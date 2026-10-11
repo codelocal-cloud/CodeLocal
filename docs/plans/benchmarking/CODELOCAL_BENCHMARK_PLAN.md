@@ -1,5 +1,7 @@
 # CodeLocalBench — Benchmark Codex Direct vs Codex + CodeLocal
 
+> Related future benchmark: [Smart MCP Router + Jev](../integrations/SMART_MCP_ROUTER_JEV_MASTER_PLAN.md) requires a separate controlled baseline / hybrid / hybrid+Jev / native-tool-search evaluation of MCP discovery quality, task completion, actual token overhead, latency, security and net cost before release. Documentation-only as of 2026-10-11.
+
 ## 1. Mục tiêu
 
 Xây một benchmark có thể chạy lại để trả lời bằng số liệu:

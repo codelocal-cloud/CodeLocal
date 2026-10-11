@@ -1,5 +1,9 @@
 # CodeLocal Plugin Platform — Master Plan
 
+## Related planned extension (2026-10-11)
+
+[Smart MCP Router + Jev Master Plan](./SMART_MCP_ROUTER_JEV_MASTER_PLAN.md) defines a future provider-neutral, permission-first optimization of installed-tool discovery, budgeted Dashboard Chat results and optional Jev shadow reranking. It extends the existing Plugin/MCP routing model; it is **not yet implemented** and must not auto-install Plugins or bypass action approvals.
+
 ## 0. Decision
 
 CodeLocal will build a first-class Plugin Platform inspired by the current ChatGPT plugin/app model, adapted to the existing MCP Hub, Skills, Project Brain, approval and local-runtime architecture.

@@ -1,5 +1,7 @@
 # CodeLocal MCP Hub MVP
 
+> Forward plan: [Smart MCP Router + Jev Master Plan](./SMART_MCP_ROUTER_JEV_MASTER_PLAN.md) proposes evaluated, optional reranking on top of **existing** lazy MCP tool discovery. The current compact mcp search/info/call interface already avoids exposing every installed extension schema to ChatGPT; the new plan is not yet implemented.
+
 CodeLocal can host other MCP servers locally while exposing only a small, stable tool surface to ChatGPT.
 
 The architecture deliberately keeps ChatGPT as the only planner:
