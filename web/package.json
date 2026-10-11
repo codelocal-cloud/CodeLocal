@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:ui": "node src/lib/i18n/i18n.test.mjs && node src/app/blog/blog-i18n.test.mjs && node src/app/dashboard/dashboard-i18n.test.mjs && node src/lib/media-upload.test.mjs && node src/app/interface-layout.test.mjs && node --experimental-strip-types src/app/dashboard/chat-tool-output.test.mjs && node --experimental-strip-types src/app/dashboard/chat-queue.test.mjs",
+    "test:ui": "node src/lib/i18n/i18n.test.mjs && node src/app/blog/blog-i18n.test.mjs && node src/app/dashboard/dashboard-i18n.test.mjs && node src/lib/media-upload.test.mjs && node src/app/interface-layout.test.mjs && node --experimental-strip-types src/app/dashboard/chat-tool-output.test.mjs && node --experimental-strip-types src/app/dashboard/chat-queue.test.mjs && node --experimental-strip-types src/app/dashboard/chat-workspace-key.test.mjs && node --experimental-strip-types src/app/dashboard/chat-history-cursor.test.mjs",
     "check": "npm run lint && npm run typecheck && npm run test:ui && npm run build"
   },
   "engines": {

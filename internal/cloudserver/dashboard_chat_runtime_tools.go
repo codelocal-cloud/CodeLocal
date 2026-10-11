@@ -190,7 +190,7 @@ func dashboardResolveRuntimeWorkspace(r *http.Request, s *Server, userID string,
 	if state := dashboardExecutionStateFromRequest(r); state != nil && state.workspace != nil {
 		requested, _ := args["workspace"].(string)
 		requested = strings.TrimSpace(requested)
-		if requested != "" && dashboardChatFindWorkspace([]gateway.WorkspaceView{*state.workspace}, requested) == nil {
+		if !dashboardChatMatchesBoundWorkspace(*state.workspace, requested) {
 			return nil, fmt.Errorf("workspace locked to active task; start a new task to change project")
 		}
 		return state.workspace, nil

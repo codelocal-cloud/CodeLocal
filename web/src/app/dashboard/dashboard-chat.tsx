@@ -15,10 +15,11 @@ import { ChatNewTaskDialog, GENERAL_PROJECT_KEY, type ChatNewTaskModel, type Cha
 import { ChatProviderManager } from "./chat-provider-manager";
 import { ChatTopBar } from "./chat-top-bar";
 import { ChatRichMessage } from "./chat-rich-message";
+import { historyCursor, type ChatHistoryCursor } from "./chat-history-cursor";
 import { shouldDispatchQueuedPrompt, type ChatRunOutcome, type QueuedChatPrompt } from "./chat-queue";
 import { ChatSidebarBrand, ChatSidebarFooter } from "./chat-sidebar-footer";
 import { chatViewportFrame } from "./chat-visual-viewport";
-import { projectTreeOpen, threadBelongsToWorkspace, threadCreationPayload, toggleExpandedProject, workspaceIdentityKey } from "./chat-workspace-key";
+import { projectTreeOpen, threadBelongsToWorkspace, threadBoundWorkspace, threadCreationPayload, toggleExpandedProject, workspaceIdentityKey } from "./chat-workspace-key";
 import { useDashboardResource } from "./use-dashboard-resource";
 import headerStyles from "./chat-header.module.css";
 import mobileStyles from "./chat-mobile.module.css";
@@ -97,6 +98,7 @@ type MediaPrepareResponse = ChatImageMeta & {
 };
 
 const suggestions: MessageKey[] = ["Explain this codebase", "Find and fix a bug", "Add tests for recent changes"];
+const gitReviewInstruction = "Inspect the current project's real Git status and unified diff using get_project_git_status and review_project_diff. Summarize changed files, do not modify anything.";
 
 function modelLabel(model: string) {
   return model === "auto" ? "Auto" : model;
@@ -253,6 +255,9 @@ export function DashboardChat() {
   });
   const [threadActionLoading, setThreadActionLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [olderHistoryLoading, setOlderHistoryLoading] = useState(false);
+  const [olderHistoryCursor, setOlderHistoryCursor] = useState<ChatHistoryCursor | null>(null);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [modelOptions, setModelOptions] = useState<ChatModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -502,7 +507,10 @@ export function DashboardChat() {
         return response.json() as Promise<unknown>;
       })
       .then((data) => {
-        if (data) setMessages(historyMessages(data));
+        if (!data) return;
+        setMessages(historyMessages(data));
+        setOlderHistoryCursor(historyCursor(data));
+        setHasMoreHistory((data as { hasMore?: boolean }).hasMore === true);
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) setNotice({ kind: "error", text: t("Could not load chat history") });
@@ -712,7 +720,7 @@ export function DashboardChat() {
     if (!loading || !activeThreadId || !content || image) return;
     setQueuedPrompt({ threadId: activeThreadId, content });
     setInput("");
-    setNotice({ kind: "status", text: "Next instruction queued for this task. It will run only if the current response completes successfully." });
+    setNotice({ kind: "status", text: t("Next instruction queued for this task. It will run only if the current response completes successfully.") });
   }
 
   function sendQueuedPrompt() {
@@ -917,6 +925,8 @@ export function DashboardChat() {
       if (projectKey) setExpandedProjects((current) => new Set(current).add(projectKey));
       setSelectedWorkspaceKey(projectKey || "auto");
       setSelectedModel(newTaskModel);
+      followLatestRef.current = true;
+      setShowJumpLatest(false);
       setHistoryLoading(true);
       setActiveThreadId(thread.id);
       setMessages([]);
@@ -935,7 +945,7 @@ export function DashboardChat() {
   }
 
   function newThread() {
-    if (loading || threadActionLoading) return;
+    if (loading || olderHistoryLoading || threadActionLoading) return;
     setThreadDrawerOpen(false);
     openNewTaskDialog("");
   }
@@ -947,7 +957,7 @@ export function DashboardChat() {
   }
 
   async function renameThread(thread: ChatThread) {
-    if (loading || threadActionLoading) return;
+    if (loading || olderHistoryLoading || threadActionLoading) return;
     const title = window.prompt(t("Conversation name"), thread.title)?.trim();
     if (!title || title === thread.title) return;
     setThreadActionLoading(true);
@@ -972,7 +982,7 @@ export function DashboardChat() {
   }
 
   async function deleteThread(thread: ChatThread) {
-    if (loading || threadActionLoading || !window.confirm(t("Delete “{title}”?", { title: thread.title }))) return;
+    if (loading || olderHistoryLoading || threadActionLoading || !window.confirm(t("Delete “{title}”?", { title: thread.title }))) return;
     setThreadActionLoading(true);
     try {
       const response = await fetch(`/api/v1/dashboard/chat/threads/${encodeURIComponent(thread.id)}`, { method: "DELETE", credentials: "include" });
@@ -997,6 +1007,7 @@ export function DashboardChat() {
 
   async function send(event: FormEvent) {
     event.preventDefault();
+    if (olderHistoryLoading) return;
     const quickMessage = quickMessageRef.current;
     quickMessageRef.current = null;
     const text = (quickMessage ?? input).trim();
@@ -1033,6 +1044,8 @@ export function DashboardChat() {
     const next = [...messages, userMessage];
     const placeholderIndex = next.length;
 
+    followLatestRef.current = true;
+    setShowJumpLatest(false);
     setMessages([...next, { role: "assistant", content: "", tool_calls: [] }]);
     // Quick actions/queued turns must not erase a newer unsent composer draft.
     if (!quickMessage) setInput("");
@@ -1057,6 +1070,7 @@ export function DashboardChat() {
       content: message.content,
       image: message.role === "user" ? message.image : undefined,
     }));
+      const threadWorkspace = threadBoundWorkspace(activeThread, workspaceItems);
       const payload = {
         requestId,
         threadId: requestThreadId,
@@ -1072,10 +1086,10 @@ export function DashboardChat() {
           contentType: sendImage.contentType,
           size: sendImage.size,
         } : undefined,
-        workspace: selectedWorkspace ? {
-          deviceId: selectedWorkspace.deviceId,
-          workspaceId: selectedWorkspace.workspaceId,
-          workspaceName: selectedWorkspace.workspaceName,
+        workspace: threadWorkspace ? {
+          deviceId: threadWorkspace.deviceId,
+          workspaceId: threadWorkspace.workspaceId,
+          workspaceName: threadWorkspace.workspaceName,
         } : undefined,
       };
       let activeSkills: SkillBadge[] = [];
@@ -1270,7 +1284,7 @@ export function DashboardChat() {
 
   async function clear(thread?: ChatThread) {
     const target = thread ?? activeThread;
-    if (loading || threadActionLoading || !target || !window.confirm(t("Delete all content in “{title}”?", { title: target.title }))) return;
+    if (loading || olderHistoryLoading || threadActionLoading || !target || !window.confirm(t("Delete all content in “{title}”?", { title: target.title }))) return;
     setThreadActionLoading(true);
     try {
       const response = await fetch(`/api/v1/dashboard/chat/history?threadId=${encodeURIComponent(target.id)}`, { method: "DELETE", credentials: "include" });
@@ -1278,6 +1292,8 @@ export function DashboardChat() {
       // Only remove local content after the server confirms deletion.
       if (target.id === activeThreadId) {
         setMessages([]);
+        setOlderHistoryCursor(null);
+        setHasMoreHistory(false);
         setNotice(null);
       }
     } catch {
@@ -1292,12 +1308,54 @@ export function DashboardChat() {
     setExpandedProjects((current) => toggleExpandedProject(current, key));
   }
 
+  async function loadEarlierMessages() {
+    if (!activeThreadId || !olderHistoryCursor || !hasMoreHistory || loading || historyLoading || olderHistoryLoading || threadActionLoading) return;
+    const container = messagesRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    const previousTop = container?.scrollTop ?? 0;
+    const targetThread = activeThreadId;
+    setOlderHistoryLoading(true);
+    try {
+      const params = new URLSearchParams({
+        threadId: targetThread,
+        beforeTime: String(olderHistoryCursor.beforeTime),
+        beforeId: olderHistoryCursor.beforeId,
+      });
+      const response = await fetch(`/api/v1/dashboard/chat/history?${params.toString()}`, { credentials: "include" });
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (!response.ok) throw new Error(`history page ${response.status}`);
+      const data = await response.json() as unknown;
+      const older = historyMessages(data);
+      const cursor = historyCursor(data);
+      if (!older.length || !cursor) {
+        setHasMoreHistory(false);
+        return;
+      }
+      followLatestRef.current = false;
+      setMessages((current) => [...older, ...current]);
+      setOlderHistoryCursor(cursor);
+      setHasMoreHistory((data as { hasMore?: boolean }).hasMore === true);
+      window.requestAnimationFrame(() => {
+        if (container) container.scrollTop = previousTop + container.scrollHeight - previousHeight;
+      });
+    } catch {
+      setNotice({ kind: "error", text: t("Could not load chat history") });
+    } finally {
+      setOlderHistoryLoading(false);
+    }
+  }
+
   function selectThread(thread: ChatThread) {
-    if (loading || historyLoading || threadActionLoading) return;
+    if (loading || historyLoading || olderHistoryLoading || threadActionLoading) return;
     setThreadDrawerOpen(false);
     const targetWorkspaceKey = thread.workspaceKey;
     if (targetWorkspaceKey) setExpandedProjects((current) => new Set(current).add(targetWorkspaceKey));
     if (thread.id === activeThreadId) return;
+    followLatestRef.current = true;
+    setShowJumpLatest(false);
     setMessages([]);
     setHistoryLoading(true);
     setActiveThreadId(thread.id);
@@ -1311,7 +1369,7 @@ export function DashboardChat() {
   function ThreadRow({ thread }: { thread: ChatThread }) {
     return (
       <div className={`${styles.threadItem} ${treeStyles.threadItem} ${thread.id === activeThreadId ? styles.threadItemActive : ""}`}>
-        <button className={`${styles.threadSelect} ${treeStyles.threadSelect}`} type="button" onClick={() => selectThread(thread)} disabled={loading || historyLoading || threadActionLoading} title={thread.title}>
+        <button className={`${styles.threadSelect} ${treeStyles.threadSelect}`} type="button" onClick={() => selectThread(thread)} disabled={loading || historyLoading || olderHistoryLoading || threadActionLoading} title={thread.title}>
           <AppIcon name="chat" size={15} />
           <span>{thread.title}</span>
         </button>
@@ -1332,7 +1390,7 @@ export function DashboardChat() {
       <button className={`${styles.threadDrawerBackdrop} ${threadDrawerOpen ? styles.threadDrawerBackdropOpen : ""}`} type="button" onClick={() => { setThreadDrawerOpen(false); mobileDrawerTriggerRef.current?.focus(); }} aria-label={t("Close menu")} />
       <aside className={`${styles.threadSidebar} ${treeStyles.threadSidebar} ${threadDrawerOpen ? styles.threadSidebarOpen : ""}`} aria-label={t("Tasks and CodeLocal navigation")} aria-modal={threadDrawerOpen || undefined} role={threadDrawerOpen ? "dialog" : undefined}>
         <ChatSidebarBrand closeRef={threadDrawerCloseRef} onClose={() => { setThreadDrawerOpen(false); mobileDrawerTriggerRef.current?.focus(); }} />
-        <button className={`${styles.newThreadButton} ${treeStyles.newThreadButton}`} type="button" onClick={() => { setThreadDrawerOpen(false); void newThread(); }} disabled={loading || threadActionLoading}>
+        <button className={`${styles.newThreadButton} ${treeStyles.newThreadButton}`} type="button" onClick={() => { setThreadDrawerOpen(false); void newThread(); }} disabled={loading || olderHistoryLoading || threadActionLoading}>
           <AppIcon name="plus" size={17} />
           {t("New task")}
         </button>
@@ -1403,7 +1461,7 @@ export function DashboardChat() {
           drawerOpen={threadDrawerOpen}
           title={activeThread?.title || t("New task")}
           subtitle={mobileProjectSubtitle}
-          disabled={loading || threadActionLoading}
+          disabled={loading || olderHistoryLoading || threadActionLoading}
           menuRef={mobileDrawerTriggerRef}
           onOpenMenu={() => setThreadDrawerOpen(true)}
           onOpenTaskSetup={() => openNewTaskDialog(headerProjectKey || GENERAL_PROJECT_KEY)}
@@ -1535,6 +1593,11 @@ export function DashboardChat() {
         </div>
 
         <div ref={messagesRef} className={styles.chatMessages} onPaste={onPaste} onScroll={updateScrollFollow}>
+          {!historyLoading && hasMoreHistory && olderHistoryCursor ? (
+            <button className={styles.loadEarlierButton} type="button" onClick={() => void loadEarlierMessages()} disabled={olderHistoryLoading || loading || threadActionLoading}>
+              {olderHistoryLoading ? t("Loading earlier messages…") : t("Load earlier messages")}
+            </button>
+          ) : null}
           {historyLoading ? <div className={styles.historyLoading}>{t("Loading conversation…")}</div> : messages.length === 0 ? (
             <div className={styles.emptyState}>
               <span className={styles.emptyOrb} aria-hidden="true"><AppIcon name="codelocal" size={30} /></span>
@@ -1591,9 +1654,9 @@ export function DashboardChat() {
         {queuedPrompt && queuedPrompt.threadId === activeThreadId ? (
           <div className={styles.queuedPrompt} role="status">
             <AppIcon name="check" size={15} />
-            <span><strong>Next instruction</strong><small title={queuedPrompt.content}>{queuedPrompt.content}</small></span>
-            {!loading ? <button type="button" onClick={sendQueuedPrompt}>Send now</button> : null}
-            <button type="button" onClick={() => setQueuedPrompt(null)} aria-label="Remove queued instruction"><AppIcon name="close" size={15} /></button>
+            <span><strong>{t("Next instruction")}</strong><small title={queuedPrompt.content}>{queuedPrompt.content}</small></span>
+            {!loading ? <button type="button" onClick={sendQueuedPrompt}>{t("Send now")}</button> : null}
+            <button type="button" onClick={() => setQueuedPrompt(null)} aria-label={t("Remove queued instruction")}><AppIcon name="close" size={15} /></button>
           </div>
         ) : null}
         <form ref={formRef} className={styles.chatForm} onSubmit={send} onPaste={onPaste}>
@@ -1610,7 +1673,7 @@ export function DashboardChat() {
                 <AppIcon name="paperclip" size={17} />
               </button>
               {headerProject ? (
-                <button type="button" className={styles.attachBtn} onClick={() => submitQuickMessage("Inspect the current project's real Git status and unified diff using get_project_git_status and review_project_diff. Summarize changed files, do not modify anything.")} title="Review project changes (read-only)" aria-label="Review Git changes" disabled={loading || historyLoading || threadActionLoading || !activeThreadId || activeModels.length === 0}>
+                <button type="button" className={styles.attachBtn} onClick={() => submitQuickMessage(gitReviewInstruction)} title={t("Review project changes (read-only)")} aria-label={t("Review Git changes")} disabled={loading || historyLoading || threadActionLoading || !activeThreadId || activeModels.length === 0}>
                   <AppIcon name="code" size={17} />
                 </button>
               ) : null}
@@ -1628,11 +1691,11 @@ export function DashboardChat() {
               </label>
             </div>
             {loading && input.trim() && !image ? (
-              <button className={styles.queueButton} type="button" onClick={queueNextPrompt} title="Queue the next instruction for this task" aria-label="Queue next instruction">
-                <AppIcon name="plus" size={15} /> <span>Queue</span>
+              <button className={styles.queueButton} type="button" onClick={queueNextPrompt} title={t("Queue the next instruction for this task")} aria-label={t("Queue next instruction")}>
+                <AppIcon name="plus" size={15} /> <span>{t("Queue")}</span>
               </button>
             ) : null}
-            <button className={`${styles.sendBtn} ${loading ? styles.stopBtn : ""}`} type={loading ? "button" : "submit"} onClick={loading ? stopStream : undefined} disabled={loading ? false : imageUploading || historyLoading || threadActionLoading || activeModels.length === 0 || (!input.trim() && !image)} aria-label={loading ? t("Stop response") : t("Send")} title={loading ? t("Stop response") : activeModels.length === 0 ? "Add an AI provider first" : t("Send")}>
+            <button className={`${styles.sendBtn} ${loading ? styles.stopBtn : ""}`} type={loading ? "button" : "submit"} onClick={loading ? stopStream : undefined} disabled={loading ? false : imageUploading || historyLoading || olderHistoryLoading || threadActionLoading || activeModels.length === 0 || (!input.trim() && !image)} aria-label={loading ? t("Stop response") : t("Send")} title={loading ? t("Stop response") : activeModels.length === 0 ? "Add an AI provider first" : t("Send")}>
               <AppIcon name={loading ? "stop" : "send"} size={loading ? 16 : 18} />
             </button>
           </div>
@@ -1665,6 +1728,8 @@ export function DashboardChat() {
         open={contextSheetOpen}
         triggerRef={contextTriggerRef}
         imageDisabled={loading || imageUploading}
+        reviewDisabled={loading || historyLoading || threadActionLoading || !activeThreadId || !activeThreadWorkspaceKey || activeModels.length === 0}
+        onReviewGit={() => { setContextSheetOpen(false); submitQuickMessage(gitReviewInstruction); }}
         workspaceItems={workspaceItems}
         selectedWorkspaceKey={selectedWorkspaceKey}
         mode={mode}

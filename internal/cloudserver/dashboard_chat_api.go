@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -443,7 +444,7 @@ var dashboardChatTools = append([]map[string]any{
 		"type": "function",
 		"function": map[string]any{
 			"name":        "search_project_brain",
-			"description": "Search Project Brain memory/graph",
+			"description": "Project Brain search is not yet available in Dashboard Chat. Prefer search_project_code for real workspace content.",
 			"parameters": map[string]any{
 				"type":       "object",
 				"properties": map[string]any{"query": map[string]any{"type": "string"}},
@@ -1106,17 +1107,34 @@ func (s *Server) dashboardChatHistoryAPI(w http.ResponseWriter, r *http.Request)
 		webutil.JSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
-	msgs, err := s.Store.ListDashboardChatHistoryForThread(r.Context(), identity.User.ID, threadID, 50)
+	const pageSize = 50
+	beforeTime, beforeID := strings.TrimSpace(r.URL.Query().Get("beforeTime")), strings.TrimSpace(r.URL.Query().Get("beforeId"))
+	var msgs []cloud.DashboardChatMessage
+	var err error
+	if beforeTime != "" || beforeID != "" {
+		before, parseErr := strconv.ParseInt(beforeTime, 10, 64)
+		if threadID == "" || beforeID == "" || parseErr != nil || before <= 0 {
+			webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_history_cursor"})
+			return
+		}
+		msgs, err = s.Store.ListDashboardChatHistoryBefore(r.Context(), identity.User.ID, threadID, before, beforeID, pageSize+1)
+	} else {
+		msgs, err = s.Store.ListDashboardChatHistoryForThread(r.Context(), identity.User.ID, threadID, pageSize+1)
+	}
 	if err != nil {
 		webutil.JSON(w, http.StatusServiceUnavailable, map[string]string{"error": "history_unavailable"})
 		return
+	}
+	hasMore := len(msgs) > pageSize
+	if hasMore {
+		msgs = msgs[1:] // Most recent pageSize rows; the discarded row proves an older page exists.
 	}
 	for i := range msgs {
 		if msgs[i].Image != "" {
 			msgs[i].Image = s.dashboardChatHistoryImageURL(r.Context(), identity.User.ID, msgs[i].Image)
 		}
 	}
-	webutil.JSON(w, http.StatusOK, map[string]any{"messages": msgs, "threadId": threadID})
+	webutil.JSON(w, http.StatusOK, map[string]any{"messages": msgs, "threadId": threadID, "hasMore": hasMore})
 }
 
 func execDashboardTool(r *http.Request, s *Server, userID, name string, args map[string]any) string {
@@ -1129,13 +1147,7 @@ func execDashboardTool(r *http.Request, s *Server, userID, name string, args map
 		})
 		return string(payload)
 	}
-	const maxToolResult = 5000
-	trunc := func(b []byte) string {
-		if len(b) > maxToolResult {
-			return string(b[:maxToolResult]) + `,"truncated":true}`
-		}
-		return string(b)
-	}
+	trunc := dashboardCompactToolJSON
 	switch name {
 	case "list_workspaces":
 		ws, err := s.Workspaces.Catalog(r.Context(), userID)
@@ -1166,9 +1178,20 @@ func execDashboardTool(r *http.Request, s *Server, userID, name string, args map
 		return trunc(b)
 	case "search_project_brain":
 		q, _ := args["query"].(string)
-		return `{"query":` + jsonQuote(q) + `,"hits":[{"path":"web/src/app/dashboard","score":0.92}],"note":"Go mock - will query Project Brain index"}`
+		b, _ := json.Marshal(map[string]any{"query": q, "hits": []any{}, "error": "project_brain_search_unavailable", "message": "Project Brain search is not wired into Dashboard Chat. Use search_project_code for real workspace code searches; do not invent memory results."})
+		return string(b)
 	case "get_workspace_detail":
 		wk, _ := args["workspace"].(string)
+		if state := dashboardExecutionStateFromRequest(r); state != nil && state.workspace != nil {
+			if !dashboardChatMatchesBoundWorkspace(*state.workspace, wk) {
+				return `{"error":"workspace_locked_to_task","message":"Start a new task to switch projects."}`
+			}
+			b, _ := json.Marshal(map[string]any{"workspace": dashboardWorkspaceToolView(*state.workspace), "ready": true})
+			return trunc(b)
+		}
+		if s.Workspaces == nil {
+			return `{"error":"workspaces_unavailable"}`
+		}
 		catalog, err := s.Workspaces.Catalog(r.Context(), userID)
 		if err != nil {
 			return `{"error":"workspaces_unavailable"}`

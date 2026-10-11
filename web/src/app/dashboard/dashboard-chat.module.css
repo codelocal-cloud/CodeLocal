@@ -2904,6 +2904,49 @@
   .chatMessages .msgUser { padding: 10px 13px; font-size: 13.5px; }
 }
 
+.loadEarlierButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  margin: 0 auto 28px;
+  padding: 0 16px;
+  border: 1px solid rgba(156, 178, 222, 0.2);
+  border-radius: 999px;
+  background: rgba(153, 180, 235, 0.07);
+  color: #c6d5ef;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.loadEarlierButton:hover:not(:disabled) { background: rgba(153, 180, 235, 0.13); }
+.loadEarlierButton:disabled { opacity: 0.5; cursor: wait; }
+
+/* Queue stays discoverable on touch screens without displacing Send/Stop. */
+@media (max-width: 820px) {
+  .chatWorkspace .queuedPrompt {
+    width: calc(100% - 20px);
+    max-width: 830px;
+    margin: 0 auto 7px;
+    padding: 9px 10px;
+  }
+  .chatWorkspace .queuedPrompt button { min-height: 40px; flex: 0 0 auto; }
+  .chatWorkspace .chatForm .queueButton {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+    min-height: 40px;
+    padding-inline: 12px;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .chatWorkspace .queuedPrompt > span { min-width: 0; }
+  .chatWorkspace .queuedPrompt small { max-width: 100%; }
+  .chatWorkspace .queuedPrompt button { padding-inline: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chatWorkspace .suggestions button { transition: none; }
   .chatWorkspace .suggestions button:hover { transform: none; }

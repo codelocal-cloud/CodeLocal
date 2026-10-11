@@ -72,9 +72,7 @@ func (s *Store) ListDashboardChatHistory(ctx context.Context, userID string, lim
 }
 
 func (s *Store) ListDashboardChatHistoryForThread(ctx context.Context, userID, threadID string, limit int) ([]DashboardChatMessage, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 30
-	}
+	limit = dashboardChatHistoryQueryLimit(limit)
 	threadID = strings.TrimSpace(threadID)
 	if threadID != "" {
 		qRows, err := s.DB.Query(ctx, `
@@ -83,10 +81,10 @@ FROM (
  SELECT id, user_id, thread_id, role, content, tool_calls, skills, image, created_at
  FROM codelocal_dashboard_chat
  WHERE user_id=$1 AND thread_id=$2
- ORDER BY created_at DESC
+ ORDER BY created_at DESC, id DESC
  LIMIT $3
 ) recent
-ORDER BY created_at ASC`, userID, threadID, limit)
+ORDER BY created_at ASC, id ASC`, userID, threadID, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -119,10 +117,10 @@ FROM (
  SELECT id, user_id, thread_id, role, content, tool_calls, skills, image, created_at
  FROM codelocal_dashboard_chat
  WHERE user_id=$1
- ORDER BY created_at DESC
+ ORDER BY created_at DESC, id DESC
  LIMIT $2
 ) recent
-ORDER BY created_at ASC`, userID, limit)
+ORDER BY created_at ASC, id ASC`, userID, limit)
 	if err != nil {
 		return nil, err
 	}

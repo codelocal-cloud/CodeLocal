@@ -66,6 +66,22 @@ Build a dependable browser Coding Agent comparable in day-to-day interaction to 
 - **Verification:** `git diff --check`, UI localization/source suite, TypeScript typecheck, web ESLint, Next.js production build, and production dependency audit passed (0 production vulnerabilities). The pre-existing `social-card.tsx` image lint warning remains.
 - **Not yet verified:** real authenticated desktop/mobile browser screenshots and hands-on streamed-Agent E2E. This incremental visual pass stays on the feature branch; no merge/deploy until the release gate is satisfied.
 
+## Reliability and smoothness pass — October 11, 2026
+
+### BA acceptance cases
+1. **Project-bound thread:** the model's `get_workspace_detail` and runtime tools cannot switch a task to a different project by passing another workspace name or id. The frontend derives the sent workspace from the immutable thread binding, not from stale picker state.
+2. **Long conversation:** GET history returns the latest 50 messages with `hasMore`. The user can page backward with a stable `(created_at, id)` cursor and keep the scroll position; past messages stay in PostgreSQL. Provider context fetch supports the intended 120-row maximum, with the existing context-mode budget applied afterward.
+3. **Unavailable knowledge / long tool output:** `search_project_brain` cannot fabricate memory hits; it returns an explicit unavailable error until a real Project Brain adapter is provided. Oversized JSON tool replies stay valid JSON with `truncated`, a bounded preview, and original byte length.
+4. **Mobile and keyboard:** Review Git Changes is exposed in the mobile context sheet, Queue stays reachable while streaming, new labels have four-language translations, and task/context dialogs trap Tab focus without resetting focus on unrelated parent renders. Sending and selecting threads restore follow-latest behavior.
+
+### Verification and follow-up
+- [x] Add regression tests for bound workspace, no fake brain results, JSON truncation, history-query limit, thread-scoped browser workspace and history cursor.
+- [x] Run Go tests, frontend lint/typecheck/UI suite, Next.js production build, production dependency audit and `git diff --check`.
+- [ ] Authenticated desktop/mobile browser E2E with live stream, approvals, reconnect, history page scrolling and competing tasks. **No merge or deployment before release gate**.
+- [ ] Integrate real sanitized Project Brain retrieval (currently explicitly unavailable), durable server-owned job queue/replay/cancel, per-action approvals and full diff review.
+- [ ] Long-thread stress tests with PostgreSQL and pagination performance at >1,000 messages; evaluate thread-scoped index including message id if needed.
+- [ ] Follow-on cleanup of the Chat CSS override stack into smaller modules.
+
 ## Implementation tracking
 - Source audit found `/chat` has blocking ConstructionNotice, history clear mutates state before server confirmation, non-plugin approval offers Full access, runtime supports `git_status` and `git_diff` but Chat wrapper does not currently offer them.
 - First increment limits scope to honest UX and reuse existing read-only tools. Durable jobs/worktree isolation are separate follow-on increments requiring transport + persistence design, not simulated client-side.

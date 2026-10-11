@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { RuntimeExecutionMode } from "@/lib/contracts/runtime-settings";
 import { useTranslations } from "@/lib/i18n/provider";
 import { AppIcon } from "./app-icon";
+import { trapChatDialogFocus } from "./chat-dialog-focus";
 import styles from "./chat-new-task-dialog.module.css";
 
 export const GENERAL_PROJECT_KEY = "__general__";
@@ -59,12 +60,17 @@ export function ChatNewTaskDialog({
 }: ChatNewTaskDialogProps) {
   const { t } = useTranslations();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  const busyRef = useRef(busy);
+
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => { busyRef.current = busy; }, [busy]);
 
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Escape" && !busyRef.current) onCloseRef.current();
     };
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", closeOnEscape);
@@ -73,7 +79,7 @@ export function ChatNewTaskDialog({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [busy, onClose, open]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -85,7 +91,7 @@ export function ChatNewTaskDialog({
   return (
     <div className={styles.layer}>
       <button className={styles.backdrop} type="button" onClick={busy ? undefined : onClose} aria-label={t("Close new task")} />
-      <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="new-task-title">
+      <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="new-task-title" onKeyDown={trapChatDialogFocus}>
         <header className={styles.head}>
           <div>
             <span className={styles.eyebrow}>{t("CodeLocal Chat")}</span>

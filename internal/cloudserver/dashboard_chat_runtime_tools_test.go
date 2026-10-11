@@ -100,8 +100,10 @@ func TestDashboardRuntimeWorkspaceCannotSwitchActiveTask(t *testing.T) {
 		}
 	}
 
-	workspace, err := dashboardResolveRuntimeWorkspace(r, s, "user-1", map[string]any{"workspace": "unrelated_project"})
-	if err == nil || workspace != nil {
-		t.Fatalf("cross-project route = (%v,%v), want rejection", workspace, err)
+	for _, candidate := range []string{"unrelated_project", "other financial_steward project"} {
+		workspace, err := dashboardResolveRuntimeWorkspace(r, s, "user-1", map[string]any{"workspace": candidate})
+		if err == nil || workspace != nil {
+			t.Fatalf("cross-project route %q = (%v,%v), want rejection", candidate, workspace, err)
+		}
 	}
 }

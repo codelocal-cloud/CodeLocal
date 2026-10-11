@@ -15,6 +15,13 @@ export function threadBelongsToWorkspace(thread: ThreadIdentity, workspace: Work
   return thread.workspaceKey === workspaceIdentityKey(workspace);
 }
 
+// Build the execution request from the immutable thread binding, never from
+// temporarily stale project-picker state during a thread change.
+export function threadBoundWorkspace<T extends WorkspaceIdentity>(thread: ThreadIdentity | undefined, workspaces: readonly T[]): T | undefined {
+  if (!thread?.workspaceKey) return undefined;
+  return workspaces.find((workspace) => workspaceIdentityKey(workspace) === thread.workspaceKey);
+}
+
 export function projectTreeOpen(key: string, query: string, expanded: ReadonlySet<string>) {
   return query.trim().length > 0 || expanded.has(key);
 }

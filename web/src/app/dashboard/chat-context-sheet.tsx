@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WorkspacesResource } from "@/lib/contracts/resources";
 import { AppIcon } from "./app-icon";
+import { trapChatDialogFocus } from "./chat-dialog-focus";
 import { useTranslations } from "@/lib/i18n/provider";
 import styles from "./chat-mobile.module.css";
 
@@ -15,6 +16,8 @@ type ChatContextSheetProps = {
   open: boolean;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
   imageDisabled: boolean;
+  reviewDisabled: boolean;
+  onReviewGit: () => void;
   workspaceItems: WorkspaceItem[];
   selectedWorkspaceKey: string;
   mode: ChatMode;
@@ -39,6 +42,8 @@ export function ChatContextSheet({
   open,
   triggerRef,
   imageDisabled,
+  reviewDisabled,
+  onReviewGit,
   workspaceItems,
   selectedWorkspaceKey,
   mode,
@@ -60,7 +65,10 @@ export function ChatContextSheet({
 }: ChatContextSheetProps) {
   const { locale, t } = useTranslations();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
   const [modelSearch, setModelSearch] = useState("");
+
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   const visibleModels = useMemo(() => {
     const query = modelSearch.trim().toLocaleLowerCase(locale);
     return query ? models.filter((model) => `${modelLabel(model)} ${model}`.toLocaleLowerCase(locale).includes(query)) : models;
@@ -71,7 +79,7 @@ export function ChatContextSheet({
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      onClose();
+      onCloseRef.current();
       triggerRef.current?.focus();
     };
     document.body.style.overflow = "hidden";
@@ -81,7 +89,7 @@ export function ChatContextSheet({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [onClose, open, triggerRef]);
+  }, [open, triggerRef]);
 
   if (!open) return null;
 
@@ -93,7 +101,7 @@ export function ChatContextSheet({
   return (
     <div className={styles.sheetLayer}>
       <button className={styles.sheetBackdrop} type="button" onClick={closeAndRestore} aria-label={t("Close context options")} />
-      <section className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="chat-context-title">
+      <section className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="chat-context-title" onKeyDown={trapChatDialogFocus}>
         <div className={styles.sheetGrabber} aria-hidden="true" />
         <header className={styles.sheetHead}>
           <div>
@@ -108,6 +116,13 @@ export function ChatContextSheet({
             <span><strong>{t("Add image")}</strong><small>{t("PNG, JPG, or an image from your library")}</small></span>
             <AppIcon name="chevron-right" size={17} />
           </button>
+          {!reviewDisabled ? (
+            <button className={styles.attachAction} type="button" onClick={onReviewGit}>
+              <span><AppIcon name="code" size={20} /></span>
+              <span><strong>{t("Review Git changes")}</strong><small>{t("Review project changes (read-only)")}</small></span>
+              <AppIcon name="chevron-right" size={17} />
+            </button>
+          ) : null}
 
           <fieldset className={styles.projectField}>
             <legend>{t("Project")}</legend>
