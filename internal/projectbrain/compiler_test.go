@@ -79,3 +79,49 @@ func TestCompileContextRecoversLegacyBudgetWhenMandatoryRulesOutgrowIt(t *testin
 		t.Fatalf("legacy budget upgrade must preserve required rules: %#v", packet)
 	}
 }
+
+func TestCompileContextGrowsDefaultBudgetForLongRequiredProjectRules(t *testing.T) {
+	mandatory := strings.Repeat("Follow the project's migration and security rules. ", 300)
+	optional := "Prefer concise status updates for minor tasks."
+	resolved := ResolvedRules{Fingerprint: "long-project-rules", Rules: []CanonicalRule{
+		compilerRule("required-project", mandatory, AuthorityProject, true),
+		compilerRule("optional-project", optional, AuthorityRepository, false),
+	}}
+	packet := CompileContext(resolved, DefaultRuleContextBudget)
+	if packet.Budget.MaxChars <= DefaultRuleContextBudget || packet.Budget.MaxChars > MaxRuleContextBudget {
+		t.Fatalf("required instructions did not trigger bounded budget growth: %#v", packet.Budget)
+	}
+	if packet.MandatoryOverflow || !packet.MutationAllowed || packet.Budget.DroppedRequired != 0 || packet.Truncated {
+		t.Fatalf("long required instructions should not block mutation: %#v", packet)
+	}
+	if len(packet.EffectiveRules) != 2 || packet.EffectiveRules[0].Text != strings.TrimSpace(mandatory) ||
+		packet.EffectiveRules[1].Text != optional {
+		t.Fatalf("mandatory rule lost content or optional rule disappeared: %#v", packet.EffectiveRules)
+	}
+}
+
+func TestCompileContextStillFailsClosedPastMaximumRuleBudget(t *testing.T) {
+	mandatory := strings.Repeat("x", MaxRuleContextBudget+1)
+	resolved := ResolvedRules{Fingerprint: "over-max-project-rules", Rules: []CanonicalRule{
+		compilerRule("oversized-required", mandatory, AuthorityProject, true),
+	}}
+	packet := CompileContext(resolved, DefaultRuleContextBudget)
+	if packet.Budget.MaxChars != MaxRuleContextBudget || !packet.MandatoryOverflow || packet.MutationAllowed {
+		t.Fatalf("rules above the bounded maximum must still fail closed: %#v", packet)
+	}
+	if packet.Budget.DroppedRequired != 1 || len(packet.OmittedRequiredRuleIDs) != 1 ||
+		len(packet.EffectiveRules) != 0 {
+		t.Fatalf("oversized mandatory rules must not be silently truncated: %#v", packet)
+	}
+}
+
+func TestCompileContextPreservesExplicitSmallerBudgets(t *testing.T) {
+	mandatory := strings.Repeat("x", DefaultRuleContextBudget+1)
+	resolved := ResolvedRules{Fingerprint: "explicit-budget", Rules: []CanonicalRule{
+		compilerRule("required", mandatory, AuthorityProject, true),
+	}}
+	packet := CompileContext(resolved, 3000)
+	if packet.Budget.MaxChars != 3000 || !packet.MandatoryOverflow || packet.MutationAllowed {
+		t.Fatalf("explicit small caller budget must be respected: %#v", packet)
+	}
+}

@@ -10,6 +10,7 @@ import (
 const (
 	DefaultRuleContextBudget = 12000
 	LegacyRuleContextBudget  = 8000
+	MaxRuleContextBudget     = 48000
 	MaxCompiledRules         = 24
 )
 
@@ -166,19 +167,26 @@ func CompileContext(resolved ResolvedRules, maxChars int) ContextPacket {
 	if maxChars <= 0 {
 		maxChars = DefaultRuleContextBudget
 	}
-	if maxChars > 48000 {
-		maxChars = 48000
+	if maxChars > MaxRuleContextBudget {
+		maxChars = MaxRuleContextBudget
 	}
 
 	compacted, duplicateRules, inputChars, deduplicatedChars := compactRules(resolved.Rules)
-	// Local clients before the default budget was centralized pinned this call
-	// to 8k. Preserve deliberate smaller test/caller budgets, but let that
-	// legacy value grow to today's default when mandatory rules alone no longer
-	// fit. This keeps fail-closed semantics without deadlocking valid mutations.
-	if maxChars == LegacyRuleContextBudget {
+	// The default and legacy budgets are starting points, not hard limits for
+	// mandatory project instructions. Grow them when necessary to avoid blocking
+	// valid mutations merely because AGENTS.md (or other required rules) is long.
+	// Explicit smaller caller budgets remain strict, and instructions beyond the
+	// maximum still fail closed instead of being silently truncated.
+	if maxChars == LegacyRuleContextBudget || maxChars == DefaultRuleContextBudget {
 		requiredChars := requiredRuleChars(compacted)
-		if requiredChars > maxChars && requiredChars <= DefaultRuleContextBudget {
-			maxChars = DefaultRuleContextBudget
+		if requiredChars > maxChars {
+			maxChars = requiredChars + DefaultRuleContextBudget/4 // Room for relevant rules.
+			if maxChars < DefaultRuleContextBudget {
+				maxChars = DefaultRuleContextBudget
+			}
+			if maxChars > MaxRuleContextBudget {
+				maxChars = MaxRuleContextBudget
+			}
 		}
 	}
 
