@@ -55,6 +55,7 @@ type ContextPacket struct {
 	MandatoryOverflow      bool           `json:"mandatoryOverflow"`
 	OmittedRequiredRuleIDs []string       `json:"omittedRequiredRuleIds,omitempty"`
 	MutationAllowed        bool           `json:"mutationAllowed"`
+	RecoveryHint           string         `json:"recoveryHint,omitempty"`
 	SecurityBoundary       string         `json:"securityBoundary"`
 }
 
@@ -222,6 +223,7 @@ func CompileContext(resolved ResolvedRules, maxChars int) ContextPacket {
 	if len(packet.OmittedRequiredRuleIDs) > 0 {
 		packet.MandatoryOverflow = true
 		packet.MutationAllowed = false
+		packet.RecoveryHint = "Required project instructions exceed the context budget. Refresh context.task with exact file targets; if this persists, update the CodeLocal client to a release supporting adaptive mandatory-rule budgets. Do not remove security rules or retry edits without a complete policy snapshot."
 	}
 
 	selectedRelevant := 0

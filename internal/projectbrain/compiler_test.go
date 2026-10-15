@@ -1,6 +1,7 @@
 package projectbrain
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -123,5 +124,22 @@ func TestCompileContextPreservesExplicitSmallerBudgets(t *testing.T) {
 	packet := CompileContext(resolved, 3000)
 	if packet.Budget.MaxChars != 3000 || !packet.MandatoryOverflow || packet.MutationAllowed {
 		t.Fatalf("explicit small caller budget must be respected: %#v", packet)
+	}
+}
+
+// Reproduces OmniRoute's 92-rule, 13,051-character project guidance. A
+// default-budget caller must not be blocked by the old 12,000-char ceiling.
+func TestCompileContextOmniRouteMandatoryRulesRegression(t *testing.T) {
+	rules := make([]CanonicalRule, 92)
+	for i := range rules {
+		text := strings.Repeat("Follow the mandatory project safety boundary. ", 3)
+		rules[i] = compilerRule(fmt.Sprintf("omniroute-%03d", i), text+fmt.Sprintf(" Rule %03d", i), AuthorityRepository, true)
+	}
+	packet := CompileContext(ResolvedRules{Fingerprint: "omniroute-92", Targets: []string{"open-sse/utils/chatgptWebFirstParty.ts"}, Rules: rules}, DefaultRuleContextBudget)
+	if packet.MandatoryOverflow || !packet.MutationAllowed || packet.Budget.DroppedRequired != 0 || packet.Budget.RequiredRules != 92 {
+		t.Fatalf("OmniRoute required rules must be preserved without blocking mutation: %#v", packet.Budget)
+	}
+	if packet.Budget.MaxChars <= DefaultRuleContextBudget {
+		t.Fatalf("default budget was not expanded: %#v", packet.Budget)
 	}
 }
