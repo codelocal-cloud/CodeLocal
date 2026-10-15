@@ -25,6 +25,17 @@ func TestPolicyBlocksEscapesAndRemembersRoutineWorkspaceExecution(t *testing.T) 
 	}
 }
 
+func TestRoutineDeployAndMainPushCanRequestApproval(t *testing.T) {
+	root := t.TempDir()
+	ctx := Context{WorkspaceRoot: root, CWD: root}
+	for _, command := range []string{"git push origin main", "npm run deploy"} {
+		decision := Classify(command, NetworkApproval, ctx)
+		if decision.Blocked || !decision.RequiresApproval || decision.ApprovalPolicy != ApprovalRememberable || decision.ApprovalKey == "" {
+			t.Fatalf("routine command %q should be approvable without full access: %#v", command, decision)
+		}
+	}
+}
+
 func TestPolicyBlocksCrossPlatformAbsolutePaths(t *testing.T) {
 	root := t.TempDir()
 	for _, candidate := range []string{"/Users/me/private", "C:/Users/me/private", `C:\Users\me\private`, `..\outside`} {
