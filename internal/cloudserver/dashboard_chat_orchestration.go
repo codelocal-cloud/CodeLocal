@@ -131,6 +131,9 @@ func dashboardToolResultStatus(result string) string {
 	if payload["status"] == "approval_required" {
 		return "approval_required"
 	}
+	if payload["status"] == "blocked" {
+		return "error"
+	}
 	if payload["isError"] == true {
 		return "error"
 	}

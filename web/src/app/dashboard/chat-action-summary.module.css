@@ -219,6 +219,47 @@
 
 .approvalRow button:disabled { opacity: 0.45; cursor: default; }
 
+.approvalRow > span small {
+  grid-column: 2;
+  white-space: normal;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.approvalRow .approvalCommand {
+  display: block;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: rgba(10, 16, 25, .52);
+  font-family: ui-monospace, monospace;
+  color: rgba(236, 232, 223, .86);
+}
+
+.policyReason {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: #f0c78b !important;
+}
+
+.approvalChoices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.approvalRow button.allowOnce {
+  background: rgba(71, 162, 113, .19);
+  border-color: rgba(91, 205, 137, .38);
+  color: #b9f3d3;
+}
+
+@media (max-width: 600px) {
+  .approvalRow { align-items: stretch; flex-direction: column; }
+  .approvalChoices { justify-content: flex-start; }
+}
+
 @media (max-width: 820px) {
   .disclosure > summary,
   .approvalRow { min-height: 48px; }
