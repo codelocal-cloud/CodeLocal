@@ -173,12 +173,11 @@ func CompileContext(resolved ResolvedRules, maxChars int) ContextPacket {
 	}
 
 	compacted, duplicateRules, inputChars, deduplicatedChars := compactRules(resolved.Rules)
-	// The default and legacy budgets are starting points, not hard limits for
-	// mandatory project instructions. Grow them when necessary to avoid blocking
-	// valid mutations merely because AGENTS.md (or other required rules) is long.
-	// Explicit smaller caller budgets remain strict, and instructions beyond the
-	// maximum still fail closed instead of being silently truncated.
-	if maxChars == LegacyRuleContextBudget || maxChars == DefaultRuleContextBudget {
+	// Standard-sized budgets are starting allocations, not hard limits for
+	// mandatory rules. Recover any intermediate allocation (e.g. 16k or 24k)
+	// when complete mandatory rules need more space; explicit small budgets
+	// stay strict and the absolute maximum remains a safety backstop.
+	if maxChars == LegacyRuleContextBudget || maxChars >= DefaultRuleContextBudget {
 		requiredChars := requiredRuleChars(compacted)
 		if requiredChars > maxChars {
 			maxChars = requiredChars + DefaultRuleContextBudget/4 // Room for relevant rules.

@@ -143,3 +143,25 @@ func TestCompileContextOmniRouteMandatoryRulesRegression(t *testing.T) {
 		t.Fatalf("default budget was not expanded: %#v", packet.Budget)
 	}
 }
+
+// Intermediate context allocations must adapt too; only truly small explicit
+// budgets are hard limits. In particular, no mandatory rule may be dropped.
+func TestCompileContextAdaptsIntermediateBudgetWithoutDroppingRequiredRules(t *testing.T) {
+	rules := make([]CanonicalRule, 92)
+	for index := range rules {
+		rules[index] = compilerRule(fmt.Sprintf("required-%03d", index),
+			strings.Repeat("Follow all mandatory project security and coding rules. ", 5)+fmt.Sprintf(" Unique %03d", index),
+			AuthorityRepository, true)
+	}
+	resolved := ResolvedRules{Fingerprint: "intermediate-budget", Targets: []string{"open-sse/utils/chatgptWebFirstParty.ts"}, Rules: rules}
+	packet := CompileContext(resolved, 16000)
+	if packet.Budget.MaxChars <= 16000 || packet.Budget.MaxChars > MaxRuleContextBudget {
+		t.Fatalf("intermediate budget did not grow safely: %#v", packet.Budget)
+	}
+	if packet.MandatoryOverflow || !packet.MutationAllowed || packet.Budget.DroppedRequired != 0 || packet.Budget.RequiredRules != 92 {
+		t.Fatalf("required rules dropped: %#v", packet.Budget)
+	}
+	if len(packet.EffectiveRules) != 92 {
+		t.Fatalf("expected 92 complete mandatory rules, got %d", len(packet.EffectiveRules))
+	}
+}
