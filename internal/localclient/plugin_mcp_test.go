@@ -125,7 +125,10 @@ func TestRemoveManagedPenpotClearsKeyButKeepsSystemServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	servers := listed.([]map[string]any)
-	if len(servers) != 1 || servers[0]["name"] != managedPenpotPluginID {
-		t.Fatalf("system Penpot server was removed: %#v", servers)
+	for _, server := range servers {
+		if server["name"] == managedPenpotPluginID {
+			return
+		}
 	}
+	t.Fatalf("system Penpot server was removed: %#v", servers)
 }

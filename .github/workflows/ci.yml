@@ -17,6 +17,8 @@ on:
       - 'go.sum'
       - 'package.json'
       - 'package-lock.json'
+      - 'web/**'
+      - '.github/workflows/ci.yml'
       - '.nvmrc'
   pull_request:
     paths:
@@ -33,6 +35,8 @@ on:
       - 'go.sum'
       - 'package.json'
       - 'package-lock.json'
+      - 'web/**'
+      - '.github/workflows/ci.yml'
       - '.nvmrc'
   workflow_dispatch:
 
