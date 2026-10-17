@@ -2,14 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
-import { AppIcon } from "./app-icon";
+import { AppIcon, type AppIconName } from "./app-icon";
 import { DashboardNav } from "./dashboard-nav";
 import styles from "./dashboard-chrome.module.css";
 import { useTranslations } from "@/lib/i18n/provider";
+import type { MessageKey } from "@/lib/i18n/messages";
+
+const quickLinks: { href: string; icon: AppIconName; label: MessageKey }[] = [
+  { href: "/dashboard", icon: "module", label: "Overview" },
+  { href: "/chat", icon: "chat", label: "Chat" },
+  { href: "/dashboard/workspaces", icon: "folder", label: "Projects" },
+  { href: "/dashboard/connect", icon: "connection", label: "MCP connections" },
+  { href: "/dashboard/plugins", icon: "plugin", label: "Plugins" },
+  { href: "/dashboard/skills", icon: "skill", label: "Skills" },
+  { href: "/dashboard/settings", icon: "settings", label: "Settings" },
+];
 
 export function DashboardSidebar() {
   const { t } = useTranslations();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -104,27 +117,41 @@ export function DashboardSidebar() {
         aria-modal={open || undefined}
         aria-label={t("Dashboard navigation")}
       >
-        <div className={styles.brandRow}>
-          <Link className={styles.brand} href="/" aria-label={t("CodeLocal home")}>
-            <Image
-              src="/codelocal-icon.png"
-              alt=""
-              width={32}
-              height={32}
-              priority
-            />
-            <span>CodeLocal</span>
+        <div className={styles.rail}>
+          <Link className={styles.railBrand} href="/dashboard" aria-label={t("CodeLocal home")}>
+            <Image src="/codelocal-icon.png" alt="" width={30} height={30} />
           </Link>
-          <button
-            className={styles.closeButton}
-            type="button"
-            onClick={close}
-            aria-label={t("Close navigation")}
-          >
-            <AppIcon name="close" />
-          </button>
+          <nav className={styles.railNav} aria-label={t("Workspace")}>
+            {quickLinks.map((item) => {
+              const active = pathname === item.href ||
+                (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`${styles.railLink} ${active ? styles.railActive : ""}`}
+                  aria-label={t(item.label)}
+                  aria-current={active ? "page" : undefined}
+                  title={t(item.label)}
+                >
+                  <AppIcon name={item.icon} size={20} />
+                </Link>
+              );
+            })}
+          </nav>
         </div>
-        <DashboardNav onNavigate={() => setOpen(false)} />
+        <div className={styles.sidebarPanel}>
+          <div className={styles.brandRow}>
+            <Link className={styles.brand} href="/" aria-label={t("CodeLocal home")}>
+              <Image src="/codelocal-icon.png" alt="" width={32} height={32} priority />
+              <span>CodeLocal</span>
+            </Link>
+            <button className={styles.closeButton} type="button" onClick={close} aria-label={t("Close navigation")}>
+              <AppIcon name="close" />
+            </button>
+          </div>
+          <DashboardNav onNavigate={() => setOpen(false)} />
+        </div>
       </aside>
     </>
   );

@@ -403,7 +403,10 @@ export function PluginsHub() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1>{t("Plugins")}</h1>
+        <div>
+          <h1>{t("Plugins")}</h1>
+          <p>{t("Extend CodeLocal with reusable tools and external data.")}</p>
+        </div>
       </header>
 
       <div className={styles.toolbar}>

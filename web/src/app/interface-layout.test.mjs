@@ -52,4 +52,18 @@ assert.match(connect, /<details[^>]*\bopen\b/);
 for (const stylesheet of ["./dashboard/blogs/blog-editor.module.css", "./dashboard/blogs/series-editor.module.css"]) {
   assert.ok(read(stylesheet).includes(":focus-within"));
 }
-console.log("Interface source checks passed: contrast, graph sizing, toolbar wrapping and upload focus.");
+const dashboardSidebar = read("./dashboard/dashboard-sidebar.tsx");
+const dashboardChrome = "./dashboard/dashboard-chrome.module.css";
+for (const href of [
+  "/dashboard", "/chat", "/dashboard/workspaces", "/dashboard/connect",
+  "/dashboard/plugins", "/dashboard/skills", "/dashboard/settings",
+]) {
+  assert.ok(dashboardSidebar.includes(`href: "${href}"`), `Missing quick navigation link: ${href}`);
+}
+assert.match(dashboardSidebar, /aria-current=\{active \? "page" : undefined\}/);
+assert.match(dashboardSidebar, /<DashboardNav onNavigate=/);
+assert.ok(declarations(dashboardChrome, ".rail", "display").includes("none"), "Mobile rail should be hidden");
+assert.ok(declarations(dashboardChrome, ".sidebarPanel", "overflow-y").includes("auto"), "Sidebar menu must remain scrollable");
+assert.ok(declarations(dashboardChrome, ".railLink", "min-height").includes("46px"), "Quick links need touch-sized targets");
+assert.ok(read("./dashboard/plugins/plugins-hub.tsx").includes('t("Extend CodeLocal with reusable tools and external data.")'));
+console.log("Interface source checks passed: contrast, graph sizing, responsive rail, toolbar and upload focus.");

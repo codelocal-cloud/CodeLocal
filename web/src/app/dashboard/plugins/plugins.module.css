@@ -3,6 +3,7 @@
   min-height: 100dvh;
   overflow: auto;
   padding: var(--dashboard-page-y) var(--dashboard-page-x) 36px;
+  background: radial-gradient(ellipse at 75% 0, rgba(104, 91, 189, 0.055), transparent 46%);
 }
 
 .header,
@@ -21,8 +22,8 @@
   min-height: 48px;
   display: flex;
   align-items: center;
-  padding: 0 2px;
-  margin-bottom: 10px;
+  padding: 0 2px 4px;
+  margin-bottom: 18px;
 }
 
 .header h1,
@@ -35,11 +36,18 @@
   margin: 0;
 }
 
+.header p {
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .header h1 {
   color: rgba(255, 255, 255, 0.96);
-  font-size: 25px;
-  font-weight: 650;
-  line-height: 1.08;
+  font-size: clamp(24px, 2.2vw, 30px);
+  font-weight: 690;
+  line-height: 1.12;
   letter-spacing: 0;
 }
 
@@ -68,8 +76,8 @@
   gap: 9px;
   padding: 0 11px;
   border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.022);
+  border-radius: 12px;
+  background: rgba(171, 175, 240, 0.035);
   color: rgba(195, 209, 230, 0.85);
 }
 
@@ -98,8 +106,8 @@
   gap: 3px;
   padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  background: rgba(171, 175, 240, 0.035);
 }
 
 .tabs button,
@@ -133,7 +141,7 @@
 }
 
 .tabs .activeTab {
-  background: rgba(255, 255, 255, 0.075);
+  background: rgba(126, 117, 227, 0.18);
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 3px 10px rgba(0, 0, 0, 0.16);
 }
 
@@ -201,9 +209,9 @@
   flex-direction: column;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.065);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.022);
+  border-radius: 16px;
+  background: linear-gradient(155deg, rgba(144, 139, 226, 0.035), transparent 58%), var(--surface);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
   transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
 }
 
@@ -214,7 +222,7 @@
 }
 
 .pluginCard[data-installed="true"] {
-  border-color: rgba(112, 194, 147, 0.13);
+  border-color: rgba(146, 155, 246, 0.18);
 }
 
 .cardTop,
@@ -246,9 +254,9 @@
   display: grid;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(181, 202, 239, 0.86);
+  border-radius: 13px;
+  background: linear-gradient(140deg, rgba(127, 119, 231, 0.19), rgba(82, 111, 210, 0.10));
+  color: #c6c4ff;
   font-size: 14px;
   font-weight: 680;
   letter-spacing: 0;
@@ -374,7 +382,7 @@
 .emptyState button {
   min-height: 44px;
   padding: 0 11px;
-  border-radius: 8px;
+  border-radius: 11px;
   font-size: 14px;
   font-weight: 580;
   transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
@@ -387,8 +395,8 @@
 }
 
 .primaryButton {
-  background: rgba(255, 255, 255, 0.09);
-  color: rgba(249, 251, 255, 0.92);
+  background: linear-gradient(125deg, rgba(101, 97, 207, 0.23), rgba(99, 116, 211, 0.12));
+  color: #eef0ff;
 }
 
 .secondaryButton,
