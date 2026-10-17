@@ -54,7 +54,7 @@ func (s *Server) collectivePreferencesPost(w http.ResponseWriter, r *http.Reques
 		webutil.JSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]any{"error": "invalid_csrf"})
 		return
 	}

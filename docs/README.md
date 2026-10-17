@@ -14,6 +14,7 @@ Start here:
 - [npm Release Operations](./operations/NPM_RELEASE.md) — canonical maintainer command for stable/beta packaging, publishing, verification and failure handling.
 - [Global Billing & International Payments Master Plan](./plans/platform/GLOBAL_BILLING_AND_INTERNATIONAL_PAYMENTS_MASTER_PLAN.md) — Vietnam-to-global SaaS billing, Lemon Squeezy launch path, provider-neutral architecture, webhooks, entitlements, payouts, compliance and production proof.
 - [Code Graph + Technical Debt Master Plan](./plans/intelligence/CODE_GRAPH_AND_TECH_DEBT_MASTER_PLAN.md) — BA flows, Code Graph accuracy/UX contracts, technical-debt backlog, rollout phases and acceptance criteria.
+- [Smart MCP Router + Jev Master Plan](./plans/integrations/SMART_MCP_ROUTER_JEV_MASTER_PLAN.md) — planned MCP Plugin routing, lazy tool discovery, optional Jev reranking, token/cost benchmark, security gates and P0–P4 delivery checklist (not implemented).
 - [Database Migration Rollout](./operations/MIGRATION_ROLLOUT.md) — staged Railway `startup -> only -> external` migration lifecycle, canary checks and rollback path.
 - [Next.js Web Cutover](./operations/NEXT_WEB_CUTOVER.md) — Railway canary, Go-fronted presentation proxy, edge probe, production flags and instant rollback for the Next web migration.
 - [OpenAI Plugin Submission Pack](./integrations/openai/submission/README.md) — listing, reviewer sandbox, test cases, policy mapping and submission gate.

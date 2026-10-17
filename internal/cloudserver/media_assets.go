@@ -108,7 +108,7 @@ func (s *Server) mediaAssetPrepareAPI(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return
 	}
@@ -172,7 +172,7 @@ func (s *Server) mediaAssetFinalizeAPI(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return
 	}

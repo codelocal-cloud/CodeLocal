@@ -2,8 +2,10 @@ package mcpgateway
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -120,6 +122,43 @@ func TestPublicDiscoveryHandlerListsCompactToolsWithoutOAuthClaims(t *testing.T)
 	if len(result.Tools) != len(compactToolDefinitions()) || len(result.Tools) != 14 {
 		t.Fatalf("public discovery returned %d tools, want 14", len(result.Tools))
 	}
+
+	var workspace *mcp.Tool
+	for _, tool := range result.Tools {
+		if tool.Name == "workspace" {
+			workspace = tool
+			break
+		}
+	}
+	if workspace == nil {
+		t.Fatal("public discovery must advertise workspace tool")
+	}
+	rawSchema, err := json.Marshal(workspace.InputSchema)
+	if err != nil {
+		t.Fatalf("marshal workspace input schema: %v", err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Enum []string `json:"enum"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(rawSchema, &schema); err != nil {
+		t.Fatalf("decode workspace input schema: %v", err)
+	}
+	contains := func(values []string, want string) bool {
+		for _, value := range values {
+			if value == want {
+				return true
+			}
+		}
+		return false
+	}
+	if !contains(schema.Properties["action"].Enum, "execution") {
+		t.Fatalf("public workspace actions=%v; execution mode selection would deadlock stale clients", schema.Properties["action"].Enum)
+	}
+	if got := schema.Properties["executionMode"].Enum; !reflect.DeepEqual(got, []string{"safe", "live"}) {
+		t.Fatalf("public executionMode choices=%v want [safe live]", got)
+	}
 }
 
 func TestPublicDiscoveryNormalizesIncompleteOpenAIModernToolsList(t *testing.T) {
@@ -145,5 +184,8 @@ func TestPublicDiscoveryNormalizesIncompleteOpenAIModernToolsList(t *testing.T) 
 	}
 	if got := response.Header.Get("X-CodeLocal-MCP-Transport"); got != "stateless-discovery" {
 		t.Fatalf("transport=%q want stateless-discovery", got)
+	}
+	if got := response.Header.Get("Cache-Control"); !strings.Contains(got, "no-store") {
+		t.Fatalf("public discovery cache control=%q want no-store", got)
 	}
 }

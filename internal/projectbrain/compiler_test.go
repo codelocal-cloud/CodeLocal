@@ -1,6 +1,7 @@
 package projectbrain
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -77,5 +78,90 @@ func TestCompileContextRecoversLegacyBudgetWhenMandatoryRulesOutgrowIt(t *testin
 	}
 	if packet.MandatoryOverflow || !packet.MutationAllowed || packet.Budget.DroppedRequired != 0 {
 		t.Fatalf("legacy budget upgrade must preserve required rules: %#v", packet)
+	}
+}
+
+func TestCompileContextGrowsDefaultBudgetForLongRequiredProjectRules(t *testing.T) {
+	mandatory := strings.Repeat("Follow the project's migration and security rules. ", 300)
+	optional := "Prefer concise status updates for minor tasks."
+	resolved := ResolvedRules{Fingerprint: "long-project-rules", Rules: []CanonicalRule{
+		compilerRule("required-project", mandatory, AuthorityProject, true),
+		compilerRule("optional-project", optional, AuthorityRepository, false),
+	}}
+	packet := CompileContext(resolved, DefaultRuleContextBudget)
+	if packet.Budget.MaxChars <= DefaultRuleContextBudget || packet.Budget.MaxChars > MaxRuleContextBudget {
+		t.Fatalf("required instructions did not trigger bounded budget growth: %#v", packet.Budget)
+	}
+	if packet.MandatoryOverflow || !packet.MutationAllowed || packet.Budget.DroppedRequired != 0 || packet.Truncated {
+		t.Fatalf("long required instructions should not block mutation: %#v", packet)
+	}
+	if len(packet.EffectiveRules) != 2 || packet.EffectiveRules[0].Text != strings.TrimSpace(mandatory) ||
+		packet.EffectiveRules[1].Text != optional {
+		t.Fatalf("mandatory rule lost content or optional rule disappeared: %#v", packet.EffectiveRules)
+	}
+}
+
+func TestCompileContextStillFailsClosedPastMaximumRuleBudget(t *testing.T) {
+	mandatory := strings.Repeat("x", MaxRuleContextBudget+1)
+	resolved := ResolvedRules{Fingerprint: "over-max-project-rules", Rules: []CanonicalRule{
+		compilerRule("oversized-required", mandatory, AuthorityProject, true),
+	}}
+	packet := CompileContext(resolved, DefaultRuleContextBudget)
+	if packet.Budget.MaxChars != MaxRuleContextBudget || !packet.MandatoryOverflow || packet.MutationAllowed {
+		t.Fatalf("rules above the bounded maximum must still fail closed: %#v", packet)
+	}
+	if packet.Budget.DroppedRequired != 1 || len(packet.OmittedRequiredRuleIDs) != 1 ||
+		len(packet.EffectiveRules) != 0 {
+		t.Fatalf("oversized mandatory rules must not be silently truncated: %#v", packet)
+	}
+}
+
+func TestCompileContextPreservesExplicitSmallerBudgets(t *testing.T) {
+	mandatory := strings.Repeat("x", DefaultRuleContextBudget+1)
+	resolved := ResolvedRules{Fingerprint: "explicit-budget", Rules: []CanonicalRule{
+		compilerRule("required", mandatory, AuthorityProject, true),
+	}}
+	packet := CompileContext(resolved, 3000)
+	if packet.Budget.MaxChars != 3000 || !packet.MandatoryOverflow || packet.MutationAllowed {
+		t.Fatalf("explicit small caller budget must be respected: %#v", packet)
+	}
+}
+
+// Reproduces OmniRoute's 92-rule, 13,051-character project guidance. A
+// default-budget caller must not be blocked by the old 12,000-char ceiling.
+func TestCompileContextOmniRouteMandatoryRulesRegression(t *testing.T) {
+	rules := make([]CanonicalRule, 92)
+	for i := range rules {
+		text := strings.Repeat("Follow the mandatory project safety boundary. ", 3)
+		rules[i] = compilerRule(fmt.Sprintf("omniroute-%03d", i), text+fmt.Sprintf(" Rule %03d", i), AuthorityRepository, true)
+	}
+	packet := CompileContext(ResolvedRules{Fingerprint: "omniroute-92", Targets: []string{"open-sse/utils/chatgptWebFirstParty.ts"}, Rules: rules}, DefaultRuleContextBudget)
+	if packet.MandatoryOverflow || !packet.MutationAllowed || packet.Budget.DroppedRequired != 0 || packet.Budget.RequiredRules != 92 {
+		t.Fatalf("OmniRoute required rules must be preserved without blocking mutation: %#v", packet.Budget)
+	}
+	if packet.Budget.MaxChars <= DefaultRuleContextBudget {
+		t.Fatalf("default budget was not expanded: %#v", packet.Budget)
+	}
+}
+
+// Intermediate context allocations must adapt too; only truly small explicit
+// budgets are hard limits. In particular, no mandatory rule may be dropped.
+func TestCompileContextAdaptsIntermediateBudgetWithoutDroppingRequiredRules(t *testing.T) {
+	rules := make([]CanonicalRule, 92)
+	for index := range rules {
+		rules[index] = compilerRule(fmt.Sprintf("required-%03d", index),
+			strings.Repeat("Follow all mandatory project security and coding rules. ", 5)+fmt.Sprintf(" Unique %03d", index),
+			AuthorityRepository, true)
+	}
+	resolved := ResolvedRules{Fingerprint: "intermediate-budget", Targets: []string{"open-sse/utils/chatgptWebFirstParty.ts"}, Rules: rules}
+	packet := CompileContext(resolved, 16000)
+	if packet.Budget.MaxChars <= 16000 || packet.Budget.MaxChars > MaxRuleContextBudget {
+		t.Fatalf("intermediate budget did not grow safely: %#v", packet.Budget)
+	}
+	if packet.MandatoryOverflow || !packet.MutationAllowed || packet.Budget.DroppedRequired != 0 || packet.Budget.RequiredRules != 92 {
+		t.Fatalf("required rules dropped: %#v", packet.Budget)
+	}
+	if len(packet.EffectiveRules) != 92 {
+		t.Fatalf("expected 92 complete mandatory rules, got %d", len(packet.EffectiveRules))
 	}
 }

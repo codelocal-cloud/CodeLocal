@@ -17,6 +17,12 @@ var (
 	ErrRepositoryCoverageChanged = errors.New("existing task execution bundle has different repository coverage")
 	ErrBindingUnavailable        = errors.New("existing task execution binding is unavailable")
 	ErrActiveCheckoutBusy        = errors.New("active checkout is already leased by another live task")
+	ErrWorktreeLimitReached      = errors.New("worktree limit reached and no older task could be archived")
+)
+
+const (
+	DefaultMaxWorktrees        = 3
+	RuntimeSettingMaxWorktrees = "CODELOCAL_MAX_WORKTREES"
 )
 
 type activeCheckoutLease struct {
@@ -32,9 +38,12 @@ var activeCheckoutLeases = struct {
 }{items: map[string]activeCheckoutLease{}}
 
 type Manager struct {
-	Store     *Store
-	Worktrees *LocalWorktreeProvider
-	Active    *ActiveCheckoutProvider
+	Store         *Store
+	Worktrees     *LocalWorktreeProvider
+	Active        *ActiveCheckoutProvider
+	retentionMu   sync.Mutex
+	maxWorktrees  int
+	worktreeInUse func(string) bool
 }
 
 func NewManager(store *Store, worktrees *LocalWorktreeProvider) *Manager {
@@ -44,7 +53,7 @@ func NewManager(store *Store, worktrees *LocalWorktreeProvider) *Manager {
 	if worktrees == nil {
 		worktrees = NewLocalWorktreeProvider("")
 	}
-	return &Manager{Store: store, Worktrees: worktrees, Active: NewActiveCheckoutProvider()}
+	return &Manager{Store: store, Worktrees: worktrees, Active: NewActiveCheckoutProvider(), maxWorktrees: DefaultMaxWorktrees}
 }
 
 type providerPreparer interface {
@@ -216,11 +225,18 @@ func (m *Manager) EnsureLocal(ctx context.Context, req PrepareRequest, ownerID s
 }
 
 func (m *Manager) Ensure(ctx context.Context, req PrepareRequest, requested Provider, ownerID string, leaseTTL time.Duration) (Bundle, error) {
+	m.retentionMu.Lock()
+	defer m.retentionMu.Unlock()
 	existing, ok, err := m.Store.Get(req.WorkspaceKey, req.TaskID)
 	if err != nil {
 		return Bundle{}, err
 	}
 	if !ok {
+		if requested == ProviderLocalWorktree {
+			if err := m.enforceWorktreeLimit(ctx, req.WorkspaceKey, req.TaskID, len(req.Repositories)); err != nil {
+				return Bundle{}, err
+			}
+		}
 		activeLeaseHeld := requested == ProviderActiveCheckout
 		if activeLeaseHeld {
 			if err := acquireActiveCheckoutLease(activeCheckoutPathsFromRequest(req), req.WorkspaceKey, req.TaskID, ownerID, leaseTTL); err != nil {
@@ -279,6 +295,12 @@ func (m *Manager) Ensure(ctx context.Context, req PrepareRequest, requested Prov
 	}
 	if len(missing) == 0 {
 		return claimed, nil
+	}
+	if existing.Provider == ProviderLocalWorktree {
+		if err := m.enforceWorktreeLimit(ctx, req.WorkspaceKey, req.TaskID, len(missing)); err != nil {
+			_, _ = m.Store.Release(req.WorkspaceKey, req.TaskID, ownerID)
+			return Bundle{}, err
+		}
 	}
 	preparer, err := m.provider(existing.Provider)
 	if err != nil {

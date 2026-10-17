@@ -1,6 +1,8 @@
 # CodeLocal MCP Tool Surface Simplification Plan
 
 Status: Implemented — compact public cutover complete; production measurement continues
+
+Future design: [Smart MCP Router + Jev Master Plan](./SMART_MCP_ROUTER_JEV_MASTER_PLAN.md). Optional reranking is proposed **behind** this already compact public MCP tool surface, not as an expansion of the public tool catalog.
 Branch baseline: `dev`
 Baseline date: 2026-08-12
 Previous public MCP tool count: **77**

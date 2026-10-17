@@ -10,7 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestPublicToolSurfaceGenerationThirteenKeepsCompactCatalog(t *testing.T) {
+func TestPublicToolSurfaceGenerationFifteenKeepsCompactCatalog(t *testing.T) {
 	first := PublicToolSurface()
 	second := PublicToolSurface()
 	if first != second {
@@ -19,23 +19,23 @@ func TestPublicToolSurfaceGenerationThirteenKeepsCompactCatalog(t *testing.T) {
 	if first.Version != PublicToolSurfaceVersion {
 		t.Fatalf("surface version=%d want public version=%d", first.Version, PublicToolSurfaceVersion)
 	}
-	if first.Version != 13 {
-		t.Fatalf("surface version=%d want generation 13", first.Version)
+	if first.Version != 15 {
+		t.Fatalf("surface version=%d want generation 15", first.Version)
 	}
 	if first.Count != len(compactToolDefinitions()) || first.Count != 14 {
-		t.Fatalf("generation 13 should keep exactly 14 tools: surface=%d registry=%d", first.Count, len(compactToolDefinitions()))
+		t.Fatalf("generation 15 should keep exactly 14 tools: surface=%d registry=%d", first.Count, len(compactToolDefinitions()))
 	}
 	if len(first.Hash) != 64 {
-		t.Fatalf("generation-13 surface hash must be sha256: %q", first.Hash)
+		t.Fatalf("generation-15 surface hash must be sha256: %q", first.Hash)
 	}
 	for _, name := range []string{"workspace", "context", "terminal", "blog", "browser", "computer"} {
 		if _, ok := currentPublicToolNames()[name]; !ok {
-			t.Fatalf("generation 13 must advertise %s", name)
+			t.Fatalf("generation 15 must advertise %s", name)
 		}
 	}
 	for _, removed := range []string{"device", "project", "dependency", "lsp", "process", "approvals", "security", "mobile"} {
 		if _, ok := currentPublicToolNames()[removed]; ok {
-			t.Fatalf("generation 13 must not advertise grouped/internal tool %s", removed)
+			t.Fatalf("generation 15 must not advertise grouped/internal tool %s", removed)
 		}
 	}
 	publishArtifact := false
@@ -51,7 +51,21 @@ func TestPublicToolSurfaceGenerationThirteenKeepsCompactCatalog(t *testing.T) {
 		}
 	}
 	if !publishArtifact {
-		t.Fatal("generation 13 terminal schema must advertise publish_artifact")
+		t.Fatal("generation 14 terminal schema must advertise publish_artifact")
+	}
+}
+
+func TestCurrentMCPContractExplainsUnfinishedAgentWorkWithoutLegacyDrift(t *testing.T) {
+	current := publicMCPInstructions()
+	if !strings.Contains(current, "status=needs_continuation") || !strings.Contains(current, "not a finished user task") {
+		t.Fatal("current MCP instructions must tell hosts how to continue incomplete tasks")
+	}
+	if strings.Contains(legacyPublicMCPInstructions(), "status=needs_continuation") {
+		t.Fatal("pinned legacy instructions must remain byte-identical")
+	}
+	agent := compactDefinitionsByName()["agent"]
+	if !strings.Contains(agent.Description, "status=needs_continuation") {
+		t.Fatal("agent tool description must carry the continuation signal for hosts that omit server instructions")
 	}
 }
 

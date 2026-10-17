@@ -1507,7 +1507,11 @@ export function DashboardChat() {
                   </div>
                 ) : null}
                 {message.tool_calls?.length ? (
-                  <ChatActionSummary actions={message.tool_calls} busy={loading} onApprove={() => submitQuickMessage("full access")} />
+                  <ChatActionSummary actions={message.tool_calls} busy={loading || index !== messages.length - 1}
+                    onApprove={() => submitQuickMessage("full access")}
+                    onApproveOnce={(action) => submitQuickMessage(`Tôi xác nhận CHO PHÉP MỘT LẦN duy nhất thao tác CodeLocal đang chờ: ${action.name}, tham số ${action.arguments}. Hãy dùng approvalToken một lần đã trả về trong kết quả công cụ trước đó để thử lại chính xác thao tác này, không mở rộng quyền toàn workspace hoặc đổi câu lệnh. Sau khi thành công, tiếp tục công việc đang dở; nếu token hết hạn thì xin phê duyệt lại.`)}
+                    onDecline={(action) => submitQuickMessage(`Tôi TỪ CHỐI thao tác ${action.name} (${action.arguments}). Không thực hiện lại thao tác này và không tự đổi chế độ quyền. Báo cáo trạng thái hiện tại.`)}
+                  />
                 ) : null}
                 {message.image ? <img src={message.image} alt={t("Sent image")} className={styles.msgImage} /> : null}
                 {message.content ? (

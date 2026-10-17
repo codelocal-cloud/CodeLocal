@@ -78,7 +78,7 @@ func (s *Server) revokeDeviceResourceAPI(w http.ResponseWriter, r *http.Request)
 	if !s.WebAuth.RequireFreshSecurityContext(w, r, identity, "/dashboard/devices") {
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return
 	}
@@ -128,7 +128,7 @@ func (s *Server) removeWorkspaceResourceAPI(w http.ResponseWriter, r *http.Reque
 	if !s.WebAuth.RequireFreshSecurityContext(w, r, identity, "/dashboard/workspaces") {
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return
 	}
@@ -170,7 +170,7 @@ func (s *Server) installSystemAppResourceAPI(w http.ResponseWriter, r *http.Requ
 	if !s.WebAuth.RequireFreshSecurityContext(w, r, identity, "/dashboard/workspaces") {
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return
 	}

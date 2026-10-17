@@ -57,7 +57,7 @@ func (s *Server) skillMutationIdentity(w http.ResponseWriter, r *http.Request, r
 	if !ok {
 		return nil, false
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return nil, false
 	}

@@ -58,6 +58,34 @@ func TestProcessManagerExecutesAndCleansRequestMapping(t *testing.T) {
 	}
 }
 
+func TestProcessManagerReportsRunningProcessWithinDirectory(t *testing.T) {
+	usePortableTestShell(t)
+	root := t.TempDir()
+	worktree := filepath.Join(root, "worktree")
+	if err := os.MkdirAll(filepath.Join(worktree, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := "sleep 1"
+	if runtime.GOOS == "windows" {
+		command = "Start-Sleep -Seconds 1"
+	}
+	manager := NewManager(root, "test-workspace", nil, nil)
+	started, err := manager.Start(command, StartOptions{CWD: filepath.Join(worktree, "nested"), Timeout: 10 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !manager.RunningWithin(worktree) {
+		t.Fatal("running process inside worktree was not detected")
+	}
+	if manager.RunningWithin(filepath.Join(root, "other")) {
+		t.Fatal("running process matched an unrelated directory")
+	}
+	_ = waitExited(t, manager, started.ProcessID)
+	if manager.RunningWithin(worktree) {
+		t.Fatal("finished process still marks worktree active")
+	}
+}
+
 func TestProcessSnapshotUsesDisplayCWDWithoutLeakingExecutionPath(t *testing.T) {
 	usePortableTestShell(t)
 	workspace := t.TempDir()

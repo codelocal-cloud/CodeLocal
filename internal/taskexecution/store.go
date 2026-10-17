@@ -168,6 +168,33 @@ func (s *Store) Get(workspaceKey, taskID string) (Bundle, bool, error) {
 	return bundle.Clone(), true, nil
 }
 
+func (s *Store) ListWorkspace(workspaceKey string) ([]Bundle, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	dir := filepath.Join(s.root, digestKey("workspace", workspaceKey))
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	bundles := make([]Bundle, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		bundle, found, err := readBundle(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			bundles = append(bundles, bundle.Clone())
+		}
+	}
+	return bundles, nil
+}
+
 func (s *Store) Delete(workspaceKey, taskID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

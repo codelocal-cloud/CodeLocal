@@ -145,6 +145,21 @@ func TestWorkspaceExecutionModeCanBeAppliedImmediately(t *testing.T) {
 	}
 }
 
+func TestWorkspaceWorktreeLimitCanBeAppliedImmediately(t *testing.T) {
+	engine := newTestEngine(t)
+	result, err := engine.Handle(context.Background(), "worktree_limit", map[string]any{"limit": 2}, HandleOptions{RequestID: "worktree-limit", SessionID: "session-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, ok := result.(map[string]any)
+	if !ok || state["limit"] != 2 || engine.TaskWorktreeLimit() != 2 {
+		t.Fatalf("unexpected worktree limit state: %#v", result)
+	}
+	if _, err := engine.Handle(context.Background(), "worktree_limit", map[string]any{"limit": 21}, HandleOptions{RequestID: "worktree-limit-invalid", SessionID: "session-a"}); err == nil {
+		t.Fatal("out-of-range worktree limit must be rejected")
+	}
+}
+
 func TestMCPCallAlwaysRequiresFreshChatApproval(t *testing.T) {
 	t.Setenv("CODELOCAL_ALLOW_SHELL", "1")
 	engine := newTestEngine(t)

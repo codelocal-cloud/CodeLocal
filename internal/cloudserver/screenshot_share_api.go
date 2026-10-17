@@ -83,7 +83,7 @@ func (s *Server) screenshotSharesResourceAPI(w http.ResponseWriter, r *http.Requ
 		webutil.JSON(w, http.StatusOK, map[string]any{"shares": screenshotSharePayloads(shares, s.WebAuth.PublicBaseURL)})
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return
 	}
@@ -112,7 +112,7 @@ func (s *Server) screenshotShareResourceAPI(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return
 	}

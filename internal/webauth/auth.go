@@ -105,11 +105,29 @@ func (m *Manager) VerifyCSRF(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
+	return csrfMatchesRequest(r, cookie.Value)
+}
+
+// VerifySessionCSRF validates an authenticated browser mutation against the
+// CSRF token already bound to the server-side session. Authenticated surfaces
+// must not depend on a second CSRF cookie remaining present after login: the
+// session token is the synchronizer token exposed to same-origin UI code.
+func (m *Manager) VerifySessionCSRF(r *http.Request, identity *Identity) bool {
+	if identity == nil {
+		return false
+	}
+	return csrfMatchesRequest(r, identity.CSRF)
+}
+
+func csrfMatchesRequest(r *http.Request, expected string) bool {
+	if r == nil || expected == "" {
+		return false
+	}
 	if err := r.ParseForm(); err != nil {
 		return false
 	}
-	body := r.Form.Get("csrf")
-	a, b := []byte(cookie.Value), []byte(body)
+	submitted := r.Form.Get("csrf")
+	a, b := []byte(expected), []byte(submitted)
 	return len(a) > 0 && len(a) == len(b) && subtle.ConstantTimeCompare(a, b) == 1
 }
 
@@ -274,7 +292,7 @@ func (m *Manager) loginPost(w http.ResponseWriter, r *http.Request) {
 
 func (m *Manager) logoutPost(w http.ResponseWriter, r *http.Request) {
 	identity, _ := m.Identity(r)
-	if !m.VerifyCSRF(r) {
+	if identity == nil || !m.VerifySessionCSRF(r, identity) {
 		http.Error(w, "Invalid security token.", http.StatusForbidden)
 		return
 	}

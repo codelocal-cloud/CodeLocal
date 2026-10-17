@@ -142,7 +142,7 @@ func (s *Server) pluginMutationIdentity(w http.ResponseWriter, r *http.Request, 
 	if !ok {
 		return nil, false
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return nil, false
 	}

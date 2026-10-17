@@ -85,6 +85,7 @@ func New(root, workspaceID, workspaceName, workspaceKey, deviceID string) (*Engi
 		engine.Project.Invalidate()
 		audit.Write(audit.Event{Event: "process.finished", RequestID: record.RequestID, MCPSessionID: record.OwnerSessionID, WorkspaceKey: workspaceKey, ProcessID: record.ProcessID, Status: string(record.Status), Detail: map[string]any{"exitCode": record.ExitCode, "signal": record.Signal}})
 	})
+	engine.TaskExecutions.SetWorktreeInUse(engine.Processes.RunningWithin)
 	mcpHub, err := mcphub.New(fs.Root, func(config mcphub.ServerConfig) error {
 		return fmt.Errorf("MCP_CONNECT_APPROVAL_REQUIRED: connecting %s requires explicit user approval in the current MCP client", config.Name)
 	})
@@ -117,6 +118,26 @@ func (e *Engine) TaskExecutionProvider() taskexecution.Provider {
 		return taskexecution.ProviderActiveCheckout
 	}
 	return taskexecution.ProviderLocalWorktree
+}
+
+func (e *Engine) SetTaskWorktreeLimit(limit int) {
+	if e.TaskExecutions != nil {
+		e.TaskExecutions.SetMaxWorktrees(limit)
+	}
+}
+
+func (e *Engine) TaskWorktreeLimit() int {
+	if e.TaskExecutions == nil {
+		return taskexecution.DefaultMaxWorktrees
+	}
+	return e.TaskExecutions.MaxWorktrees()
+}
+
+func (e *Engine) ReconcileTaskWorktrees(ctx context.Context) error {
+	if e.TaskExecutions == nil {
+		return nil
+	}
+	return e.TaskExecutions.ReconcileLimit(ctx, e.WorkspaceKey)
 }
 
 func (e *Engine) SetRuntimeEnvironment(values, secrets map[string]string) {
@@ -1252,6 +1273,21 @@ func (e *Engine) handle(ctx context.Context, tool string, args map[string]any, o
 				{"mode": "safe", "label": "Safe Workspace", "recommended": true},
 				{"mode": "live", "label": "Live Project", "recommended": false},
 			},
+		}, nil
+	case "worktree_limit":
+		if raw, ok := args["limit"]; ok {
+			limit := asInt(raw, 0)
+			if limit < taskexecution.MinMaxWorktrees || limit > taskexecution.MaxMaxWorktrees {
+				return nil, fmt.Errorf("worktree limit must be between %d and %d", taskexecution.MinMaxWorktrees, taskexecution.MaxMaxWorktrees)
+			}
+			e.SetTaskWorktreeLimit(limit)
+			if err := e.ReconcileTaskWorktrees(ctx); err != nil {
+				return nil, err
+			}
+		}
+		return map[string]any{
+			"limit": e.TaskWorktreeLimit(), "scope": "workspace",
+			"min": taskexecution.MinMaxWorktrees, "max": taskexecution.MaxMaxWorktrees,
 		}, nil
 	case "project_map":
 		return e.Project.Map(asBool(args["force"], false))

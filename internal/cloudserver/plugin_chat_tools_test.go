@@ -25,6 +25,8 @@ func TestPluginConnectionSelectionNeverSilentlyFallsBack(t *testing.T) {
 func TestPluginApprovalAndToolErrorStatus(t *testing.T) {
 	for _, tc := range []struct{ payload, want string }{
 		{`{"status":"approval_required","approvalId":"opaque"}`, "approval_required"},
+		{`{"status":"blocked","reason":"security policy"}`, "error"},
+		{`{"ok":true,"result":{"status":"blocked","reason":"security policy"}}`, "error"},
 		{`{"isError":true,"content":[]}`, "error"},
 		{`{"ok":true,"result":{"isError":true}}`, "error"},
 	} {

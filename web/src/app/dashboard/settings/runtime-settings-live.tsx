@@ -17,6 +17,18 @@ const scopes: Array<{ value: RuntimeScope; label: MessageKey }> = [
   { value: "workspace", label: "Workspace" },
 ];
 
+const WORKTREE_LIMIT_KEY = "CODELOCAL_MAX_WORKTREES";
+const DEFAULT_WORKTREE_LIMIT = 3;
+const MIN_WORKTREE_LIMIT = 1;
+const MAX_WORKTREE_LIMIT = 20;
+
+function normalizedWorktreeLimit(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= MIN_WORKTREE_LIMIT && parsed <= MAX_WORKTREE_LIMIT
+    ? parsed
+    : DEFAULT_WORKTREE_LIMIT;
+}
+
 function query(scope: RuntimeScope, deviceId: string, workspaceId: string) {
   const params = new URLSearchParams({ scope });
   if (scope !== "global" && deviceId) params.set("deviceId", deviceId);
@@ -40,6 +52,7 @@ export function RuntimeSettingsLive() {
   const [editingConfigValue, setEditingConfigValue] = useState("");
   const [editingSecretKey, setEditingSecretKey] = useState("");
   const [editingSecretValue, setEditingSecretValue] = useState("");
+  const [worktreeLimitEdits, setWorktreeLimitEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; status?: number } | null>(null);
 
@@ -56,6 +69,14 @@ export function RuntimeSettingsLive() {
     : workspaceItems[0]?.workspaceId ?? "";
   const settingsURL = query(scope, effectiveDeviceId, effectiveWorkspaceId);
   const settings = useDashboardResource(settingsURL, isRuntimeSettingsResource);
+  const effectiveValues = settings.state.kind === "ready" ? settings.state.value.effective.values ?? {} : {};
+  const effectiveWorktreeLimit = normalizedWorktreeLimit(effectiveValues[WORKTREE_LIMIT_KEY]);
+  const layerConfigEntries = settings.state.kind === "ready"
+    ? Object.entries(settings.state.value.layer.values ?? {}).filter(([key]) => key !== WORKTREE_LIMIT_KEY)
+    : [];
+  const worktreeLimit = worktreeLimitEdits[effectiveWorkspaceId] ?? String(effectiveWorktreeLimit);
+  const parsedWorktreeLimit = Number(worktreeLimit);
+  const worktreeLimitValid = Number.isInteger(parsedWorktreeLimit) && parsedWorktreeLimit >= MIN_WORKTREE_LIMIT && parsedWorktreeLimit <= MAX_WORKTREE_LIMIT;
 
   const csrf = account.state.kind === "ready" ? account.state.value.csrf : "";
   const targetReady = scope === "global" || (scope === "device" ? Boolean(effectiveDeviceId) : Boolean(effectiveDeviceId && effectiveWorkspaceId));
@@ -103,6 +124,16 @@ export function RuntimeSettingsLive() {
 
   async function saveExecutionMode(mode: RuntimeExecutionMode) {
     await mutate("/api/v1/runtime/settings/execution", { mode });
+  }
+
+  async function saveWorktreeLimit(event: FormEvent) {
+    event.preventDefault();
+    if (!worktreeLimitValid) return;
+    await mutate("/api/v1/runtime/settings/config", {
+      key: WORKTREE_LIMIT_KEY,
+      value: String(parsedWorktreeLimit),
+      action: "set",
+    });
   }
 
   async function addConfig(event: FormEvent) {
@@ -210,13 +241,44 @@ export function RuntimeSettingsLive() {
             </section>
           )}
 
+          {scope === "workspace" && (
+            <section className={styles.executionPanel} aria-label={t("Worktree retention")}>
+              <header className={styles.executionHeader}>
+                <div className={styles.panelTitle}>
+                  <span className={styles.panelIcon}><AppIcon name="runtime" size={17} /></span>
+                  <div><h2>{t("Maximum worktrees")}</h2><p>{t("Oldest inactive worktree is archived and removed when this limit is exceeded.")}</p></div>
+                </div>
+              </header>
+              <form className={styles.retentionControl} onSubmit={saveWorktreeLimit}>
+                <label className={styles.limitField}>
+                  <span>{t("Worktrees per workspace")}</span>
+                  <input
+                    type="number"
+                    min={MIN_WORKTREE_LIMIT}
+                    max={MAX_WORKTREE_LIMIT}
+                    step={1}
+                    inputMode="numeric"
+                    value={worktreeLimit}
+                    disabled={saving}
+                    onChange={(event) => setWorktreeLimitEdits((current) => ({ ...current, [effectiveWorkspaceId]: event.target.value }))}
+                    aria-describedby="worktree-limit-range"
+                  />
+                </label>
+                <span id="worktree-limit-range" className={styles.limitHint}>{t("Allowed range: {min}–{max}", { min: String(MIN_WORKTREE_LIMIT), max: String(MAX_WORKTREE_LIMIT) })}</span>
+                <button className={`${styles.iconButton} ${styles.primaryAction}`} disabled={saving || !csrf || !worktreeLimitValid || parsedWorktreeLimit === effectiveWorktreeLimit} aria-label={t("Save worktree limit")} title={t("Save")}>
+                  <AppIcon name="check" size={16} />
+                </button>
+              </form>
+            </section>
+          )}
+
           <div className={styles.settingsGrid}>
             <section className={styles.panel}>
               <header className={styles.panelHeader}>
                 <div className={styles.panelTitle}>
                   <span className={styles.panelIcon}><AppIcon name="runtime" size={17} /></span>
                   <div>
-                    <div className={styles.titleLine}><h2>{t("Configuration")}</h2><span>{number.format(Object.keys(settings.state.value.layer.values ?? {}).length)}</span></div>
+                    <div className={styles.titleLine}><h2>{t("Configuration")}</h2><span>{number.format(layerConfigEntries.length)}</span></div>
                     <p>{t("Runtime values")}</p>
                   </div>
                 </div>
@@ -226,7 +288,7 @@ export function RuntimeSettingsLive() {
               </header>
 
               <div className={styles.rows}>
-                {Object.entries(settings.state.value.layer.values ?? {}).map(([key, value]) => (
+                {layerConfigEntries.map(([key, value]) => (
                   <div className={styles.settingRow} key={key}>
                     <div className={styles.settingMain}>
                       <strong>{key}</strong>
@@ -259,7 +321,7 @@ export function RuntimeSettingsLive() {
                     </div>
                   </div>
                 ))}
-                {Object.keys(settings.state.value.layer.values ?? {}).length === 0 && (
+                {layerConfigEntries.length === 0 && (
                   <div className={styles.panelEmpty}><AppIcon name="plus" size={15} /><span>{t("No overrides in this scope")}</span></div>
                 )}
               </div>

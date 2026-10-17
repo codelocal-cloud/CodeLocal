@@ -1,13 +1,53 @@
 package cloudserver
 
 import (
+	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/0xmarkhydra/codelocal/internal/cloud"
 	"github.com/0xmarkhydra/codelocal/internal/gateway"
+	"github.com/0xmarkhydra/codelocal/internal/taskexecution"
 	"github.com/0xmarkhydra/codelocal/internal/webutil"
 )
+
+func parseWorktreeLimitMutation(scope cloud.RuntimeScope, deviceID, workspaceID, key, action, value string) (int, string) {
+	limit := taskexecution.DefaultMaxWorktrees
+	if key != taskexecution.RuntimeSettingMaxWorktrees {
+		return limit, ""
+	}
+	if scope != cloud.RuntimeScopeWorkspace || deviceID == "" || workspaceID == "" {
+		return limit, "workspace_scope_required"
+	}
+	if action == "delete" {
+		return limit, ""
+	}
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < taskexecution.MinMaxWorktrees || parsed > taskexecution.MaxMaxWorktrees {
+		return limit, "invalid_worktree_limit"
+	}
+	return parsed, ""
+}
+
+func (s *Server) applyRuntimeWorkspaceOperation(ctx context.Context, userID, deviceID, workspaceID, operation string, args map[string]any) bool {
+	if s.Workspaces == nil || s.Hub == nil {
+		return false
+	}
+	workspaceKey := gateway.ClientKey(userID, deviceID, workspaceID)
+	catalog, err := s.Workspaces.Catalog(ctx, userID)
+	if err != nil {
+		return false
+	}
+	for _, workspace := range catalog {
+		if workspace.Key != workspaceKey || workspace.Status != "active" {
+			continue
+		}
+		result, callErr := s.Hub.Call(ctx, userID, workspaceKey, "dashboard-settings", operation, args, false, cloud.RandomHex(16))
+		return callErr == nil && result.OK
+	}
+	return false
+}
 
 func runtimeScopeFromRequest(r *http.Request) cloud.RuntimeScope {
 	scope := strings.TrimSpace(r.URL.Query().Get("scope"))
@@ -50,7 +90,7 @@ func (s *Server) runtimeConfigMutationAPI(w http.ResponseWriter, r *http.Request
 		webutil.JSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]any{"error": "invalid_csrf"})
 		return
 	}
@@ -68,7 +108,13 @@ func (s *Server) runtimeConfigMutationAPI(w http.ResponseWriter, r *http.Request
 		webutil.JSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_runtime_key"})
 		return
 	}
-	if r.FormValue("action") == "delete" {
+	action := r.FormValue("action")
+	worktreeLimit, limitError := parseWorktreeLimitMutation(scope, deviceID, workspaceID, key, action, r.FormValue("value"))
+	if limitError != "" {
+		webutil.JSON(w, http.StatusBadRequest, map[string]any{"error": limitError})
+		return
+	}
+	if action == "delete" {
 		delete(layer.Values, key)
 	} else {
 		layer.Values[key] = r.FormValue("value")
@@ -78,7 +124,11 @@ func (s *Server) runtimeConfigMutationAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.Store.Audit(cloud.AuditEvent{UserID: identity.User.ID, Event: "runtime.config_updated", DeviceID: deviceID, WorkspaceID: workspaceID, Detail: map[string]any{"scope": scope, "key": key, "action": first(r.FormValue("action"), "set")}})
-	webutil.JSON(w, http.StatusOK, map[string]any{"ok": true})
+	runtimeApplied := false
+	if key == taskexecution.RuntimeSettingMaxWorktrees {
+		runtimeApplied = s.applyRuntimeWorkspaceOperation(r.Context(), identity.User.ID, deviceID, workspaceID, "worktree_limit", map[string]any{"limit": worktreeLimit})
+	}
+	webutil.JSON(w, http.StatusOK, map[string]any{"ok": true, "runtimeApplied": runtimeApplied})
 }
 
 func (s *Server) runtimeExecutionModeMutationAPI(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +137,7 @@ func (s *Server) runtimeExecutionModeMutationAPI(w http.ResponseWriter, r *http.
 		webutil.JSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]any{"error": "invalid_csrf"})
 		return
 	}
@@ -113,21 +163,7 @@ func (s *Server) runtimeExecutionModeMutationAPI(w http.ResponseWriter, r *http.
 		return
 	}
 	s.Store.Audit(cloud.AuditEvent{UserID: identity.User.ID, Event: "runtime.execution_mode_updated", DeviceID: deviceID, WorkspaceID: workspaceID, Detail: map[string]any{"mode": mode, "source": "dashboard"}})
-	runtimeApplied := false
-	if s.Workspaces != nil && s.Hub != nil {
-		workspaceKey := gateway.ClientKey(identity.User.ID, deviceID, workspaceID)
-		if catalog, catalogErr := s.Workspaces.Catalog(r.Context(), identity.User.ID); catalogErr == nil {
-			for _, workspace := range catalog {
-				if workspace.Key != workspaceKey || workspace.Status != "active" {
-					continue
-				}
-				requestID := cloud.RandomHex(16)
-				result, callErr := s.Hub.Call(r.Context(), identity.User.ID, workspaceKey, "dashboard-settings", "execution_mode", map[string]any{"mode": string(mode)}, false, requestID)
-				runtimeApplied = callErr == nil && result.OK
-				break
-			}
-		}
-	}
+	runtimeApplied := s.applyRuntimeWorkspaceOperation(r.Context(), identity.User.ID, deviceID, workspaceID, "execution_mode", map[string]any{"mode": string(mode)})
 	webutil.JSON(w, http.StatusOK, map[string]any{"ok": true, "mode": mode, "runtimeApplied": runtimeApplied})
 }
 
@@ -137,7 +173,7 @@ func (s *Server) runtimeSecretMutationAPI(w http.ResponseWriter, r *http.Request
 		webutil.JSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]any{"error": "invalid_csrf"})
 		return
 	}

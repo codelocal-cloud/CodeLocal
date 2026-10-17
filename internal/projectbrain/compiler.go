@@ -10,6 +10,7 @@ import (
 const (
 	DefaultRuleContextBudget = 12000
 	LegacyRuleContextBudget  = 8000
+	MaxRuleContextBudget     = 48000
 	MaxCompiledRules         = 24
 )
 
@@ -54,6 +55,7 @@ type ContextPacket struct {
 	MandatoryOverflow      bool           `json:"mandatoryOverflow"`
 	OmittedRequiredRuleIDs []string       `json:"omittedRequiredRuleIds,omitempty"`
 	MutationAllowed        bool           `json:"mutationAllowed"`
+	RecoveryHint           string         `json:"recoveryHint,omitempty"`
 	SecurityBoundary       string         `json:"securityBoundary"`
 }
 
@@ -166,19 +168,25 @@ func CompileContext(resolved ResolvedRules, maxChars int) ContextPacket {
 	if maxChars <= 0 {
 		maxChars = DefaultRuleContextBudget
 	}
-	if maxChars > 48000 {
-		maxChars = 48000
+	if maxChars > MaxRuleContextBudget {
+		maxChars = MaxRuleContextBudget
 	}
 
 	compacted, duplicateRules, inputChars, deduplicatedChars := compactRules(resolved.Rules)
-	// Local clients before the default budget was centralized pinned this call
-	// to 8k. Preserve deliberate smaller test/caller budgets, but let that
-	// legacy value grow to today's default when mandatory rules alone no longer
-	// fit. This keeps fail-closed semantics without deadlocking valid mutations.
-	if maxChars == LegacyRuleContextBudget {
+	// Standard-sized budgets are starting allocations, not hard limits for
+	// mandatory rules. Recover any intermediate allocation (e.g. 16k or 24k)
+	// when complete mandatory rules need more space; explicit small budgets
+	// stay strict and the absolute maximum remains a safety backstop.
+	if maxChars == LegacyRuleContextBudget || maxChars >= DefaultRuleContextBudget {
 		requiredChars := requiredRuleChars(compacted)
-		if requiredChars > maxChars && requiredChars <= DefaultRuleContextBudget {
-			maxChars = DefaultRuleContextBudget
+		if requiredChars > maxChars {
+			maxChars = requiredChars + DefaultRuleContextBudget/4 // Room for relevant rules.
+			if maxChars < DefaultRuleContextBudget {
+				maxChars = DefaultRuleContextBudget
+			}
+			if maxChars > MaxRuleContextBudget {
+				maxChars = MaxRuleContextBudget
+			}
 		}
 	}
 
@@ -214,6 +222,7 @@ func CompileContext(resolved ResolvedRules, maxChars int) ContextPacket {
 	if len(packet.OmittedRequiredRuleIDs) > 0 {
 		packet.MandatoryOverflow = true
 		packet.MutationAllowed = false
+		packet.RecoveryHint = "Required project instructions exceed the context budget. Refresh context.task with exact file targets; if this persists, update the CodeLocal client to a release supporting adaptive mandatory-rule budgets. Do not remove security rules or retry edits without a complete policy snapshot."
 	}
 
 	selectedRelevant := 0

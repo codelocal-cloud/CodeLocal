@@ -276,7 +276,7 @@ func (m *Manager) changePasswordPost(w http.ResponseWriter, r *http.Request) {
 	if !m.RequireFreshSecurityContext(w, r, identity, returnPath) {
 		return
 	}
-	if !m.VerifyCSRF(r) {
+	if !m.VerifySessionCSRF(r, identity) {
 		http.Redirect(w, r, passwordChangeRedirect(returnPath, "error", "Security token expired. Please try again."), http.StatusSeeOther)
 		return
 	}

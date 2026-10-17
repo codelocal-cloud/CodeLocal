@@ -12,6 +12,31 @@ import (
 
 const publicCatalogUserID = "__codelocal_public_catalog__"
 
+type publicDiscoveryResponseWriter struct {
+	http.ResponseWriter
+}
+
+func (w *publicDiscoveryResponseWriter) applyNoStore() {
+	w.Header().Set("Cache-Control", "no-store, no-cache, no-transform, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+}
+
+func (w *publicDiscoveryResponseWriter) WriteHeader(statusCode int) {
+	w.applyNoStore()
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *publicDiscoveryResponseWriter) Write(body []byte) (int, error) {
+	w.applyNoStore()
+	return w.ResponseWriter.Write(body)
+}
+
+// Unwrap keeps http.ResponseController support used by the MCP SDK while we
+// enforce discovery cache headers at the final response-write boundary.
+func (w *publicDiscoveryResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 var publicDiscoveryMethods = map[string]struct{}{
 	"initialize":                {},
 	"server/discover":           {},
@@ -153,10 +178,15 @@ func (s *Service) PublicDiscoveryHandler() http.Handler {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
-		w.Header().Set("X-CodeLocal-MCP-Transport", "stateless-discovery")
-		w.Header().Set("X-CodeLocal-Tool-Surface-Version", fmt.Sprint(surface.Version))
-		w.Header().Set("X-CodeLocal-Tool-Surface-Hash", surface.Hash)
-		stream.ServeHTTP(w, r)
+		// Tool schemas are versioned and may change between deploys. Prevent HTTP
+		// clients/proxies from reusing a stale tools/list response after a surface
+		// generation bump (for example when workspace(action=execution) was added).
+		response := &publicDiscoveryResponseWriter{ResponseWriter: w}
+		response.applyNoStore()
+		response.Header().Set("X-CodeLocal-MCP-Transport", "stateless-discovery")
+		response.Header().Set("X-CodeLocal-Tool-Surface-Version", fmt.Sprint(surface.Version))
+		response.Header().Set("X-CodeLocal-Tool-Surface-Hash", surface.Hash)
+		stream.ServeHTTP(response, r)
 	})
 }
 

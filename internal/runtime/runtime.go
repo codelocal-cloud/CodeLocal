@@ -562,6 +562,7 @@ func (r *Runtime) Activate(ctx context.Context, workspaceID string) (*WorkspaceW
 	// discovery/sync may retry independently if Cloud or the local cache fails.
 	setting := r.runtimeSetting(worker.Workspace.WorkspaceID)
 	go r.reconcileWorkerMCP(worker, setting.MCPServers)
+	go reconcileWorkerWorktrees(worker)
 	go func(active workspace.Workspace) {
 		syncCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -581,6 +582,7 @@ func newWorkspaceWorker(r *Runtime, w workspace.Workspace) (*WorkspaceWorker, er
 	setting := r.runtimeSetting(w.WorkspaceID)
 	engine.SetRuntimeEnvironment(runtimeConfigEnvironment(setting.Snapshot), setting.Secrets)
 	engine.SetTaskExecutionProvider(runtimeTaskExecutionProvider(setting.Snapshot))
+	engine.SetTaskWorktreeLimit(runtimeTaskWorktreeLimit(setting.Snapshot))
 	worker := &WorkspaceWorker{Runtime: r, Workspace: w, Engine: engine, done: make(chan struct{}), calls: map[string]context.CancelFunc{}}
 	worker.lastUsed.Store(time.Now().UnixMilli())
 	return worker, nil

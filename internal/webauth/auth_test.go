@@ -1,11 +1,49 @@
 package webauth
 
 import (
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/0xmarkhydra/codelocal/internal/cloud"
 )
+
+func TestVerifySessionCSRFFallsBackToSessionWithoutCSRFCookie(t *testing.T) {
+	manager := &Manager{}
+	identity := &Identity{CSRF: "session-csrf-token-abcdefghijklmnopqrstuvwxyz"}
+	form := url.Values{"csrf": {identity.CSRF}}
+	request := httptest.NewRequest("POST", "/logout", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	if !manager.VerifySessionCSRF(request, identity) {
+		t.Fatal("session-bound CSRF token should verify without a separate CSRF cookie")
+	}
+}
+
+func TestVerifySessionCSRFRejectsWrongToken(t *testing.T) {
+	manager := &Manager{}
+	identity := &Identity{CSRF: "session-csrf-token-abcdefghijklmnopqrstuvwxyz"}
+	form := url.Values{"csrf": {"different-csrf-token-abcdefghijklmnopqrstuvwxyz"}}
+	request := httptest.NewRequest("POST", "/logout", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	if manager.VerifySessionCSRF(request, identity) {
+		t.Fatal("mismatched session-bound CSRF token must be rejected")
+	}
+}
+
+func TestVerifyCSRFStillRequiresCookieForPreAuthFlows(t *testing.T) {
+	manager := &Manager{}
+	form := url.Values{"csrf": {"preauth-csrf-token-abcdefghijklmnopqrstuvwxyz"}}
+	request := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	if manager.VerifyCSRF(request) {
+		t.Fatal("pre-auth CSRF verification must still require the CSRF cookie")
+	}
+}
 
 func TestPasswordHashAndVerify(t *testing.T) {
 	hash, salt, err := HashPassword("correct-horse-battery-staple")

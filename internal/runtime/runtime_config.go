@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -188,6 +189,9 @@ func (r *Runtime) InstallSystemApp(ctx context.Context, appID string) (*Workspac
 func runtimeConfigEnvironment(snapshot cloud.RuntimeConfigSnapshot) map[string]string {
 	out := map[string]string{}
 	for key, value := range snapshot.Values {
+		if key == taskexecution.RuntimeSettingMaxWorktrees {
+			continue
+		}
 		if cloud.ValidRuntimeEnvKey(strings.TrimSpace(key)) {
 			out[key] = value
 		}
@@ -200,6 +204,10 @@ func runtimeTaskExecutionProvider(snapshot cloud.RuntimeConfigSnapshot) taskexec
 		return taskexecution.ProviderActiveCheckout
 	}
 	return taskexecution.ProviderLocalWorktree
+}
+
+func runtimeTaskWorktreeLimit(snapshot cloud.RuntimeConfigSnapshot) int {
+	return taskexecution.ParseMaxWorktrees(snapshot.Values[taskexecution.RuntimeSettingMaxWorktrees])
 }
 
 func runtimeSecretRedactValues(secrets map[string]string) []string {
@@ -226,6 +234,7 @@ func (r *Runtime) applyRuntimeSettings(settings map[string]cloud.RuntimeMaterial
 		if worker := r.workers[workspaceID]; worker != nil && worker.Engine != nil {
 			worker.Engine.SetRuntimeEnvironment(runtimeConfigEnvironment(materialized.Snapshot), materialized.Secrets)
 			worker.Engine.SetTaskExecutionProvider(runtimeTaskExecutionProvider(materialized.Snapshot))
+			worker.Engine.SetTaskWorktreeLimit(runtimeTaskWorktreeLimit(materialized.Snapshot))
 			active[workspaceID] = worker
 		}
 	}
@@ -234,11 +243,23 @@ func (r *Runtime) applyRuntimeSettings(settings map[string]cloud.RuntimeMaterial
 	for workspaceID, worker := range active {
 		materialized := settings[workspaceID]
 		go r.reconcileWorkerMCP(worker, materialized.MCPServers)
+		go reconcileWorkerWorktrees(worker)
 	}
 	// Applying runtime settings must never create System App files. Installation
 	// is an explicit user action handled by the realtime runtime control lane.
 	if err := saveRuntimeConfigCache(cache); err != nil {
 		return
+	}
+}
+
+func reconcileWorkerWorktrees(worker *WorkspaceWorker) {
+	if worker == nil || worker.Engine == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := worker.Engine.ReconcileTaskWorktrees(ctx); err != nil {
+		slog.Debug("worktree retention reconcile delayed; workspace remains usable", "workspaceId", worker.Workspace.WorkspaceID, "error", err)
 	}
 }
 

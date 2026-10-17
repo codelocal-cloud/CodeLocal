@@ -335,7 +335,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 		if !s.WebAuth.RequireFreshSecurityContext(w, r, identity, retryURL) {
 			return
 		}
-		if !s.WebAuth.VerifyCSRF(r) {
+		if !s.WebAuth.VerifySessionCSRF(r, identity) {
 			http.Redirect(w, r, authorizeRetryURL(r, "Invalid security token. Restart the authorization flow."), http.StatusSeeOther)
 			return
 		}

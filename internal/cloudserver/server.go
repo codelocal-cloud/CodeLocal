@@ -578,7 +578,7 @@ func (s *Server) pairApprovePost(w http.ResponseWriter, r *http.Request) {
 	if !s.WebAuth.RequireFreshSecurityContext(w, r, identity, next) {
 		return
 	}
-	if !s.WebAuth.VerifyCSRF(r) {
+	if !s.WebAuth.VerifySessionCSRF(r, identity) {
 		http.Redirect(w, r, next+"&error="+url.QueryEscape("Invalid security token. Please try again."), http.StatusSeeOther)
 		return
 	}

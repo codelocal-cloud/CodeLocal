@@ -9,7 +9,10 @@ import (
 )
 
 func TestRuntimeConfigEnvironmentExportsOnlyNonSecretEnvKeys(t *testing.T) {
-	snapshot := cloud.RuntimeConfigSnapshot{Values: map[string]string{"FFMPEG_PATH": "ffmpeg", "video.aspect": "9:16"}}
+	snapshot := cloud.RuntimeConfigSnapshot{Values: map[string]string{
+		"FFMPEG_PATH": "ffmpeg", "video.aspect": "9:16",
+		taskexecution.RuntimeSettingMaxWorktrees: "3",
+	}}
 	env := runtimeConfigEnvironment(snapshot)
 	if env["FFMPEG_PATH"] != "ffmpeg" {
 		t.Fatalf("expected runtime config value missing: %#v", env)
@@ -20,6 +23,9 @@ func TestRuntimeConfigEnvironmentExportsOnlyNonSecretEnvKeys(t *testing.T) {
 	if _, ok := env["VBEE_API_KEY"]; ok {
 		t.Fatal("secret unexpectedly merged into ordinary runtime config")
 	}
+	if _, ok := env[taskexecution.RuntimeSettingMaxWorktrees]; ok {
+		t.Fatal("internal worktree setting leaked into task environment")
+	}
 }
 
 func TestRuntimeTaskExecutionProviderDefaultsSafeAndMapsLive(t *testing.T) {
@@ -28,6 +34,16 @@ func TestRuntimeTaskExecutionProviderDefaultsSafeAndMapsLive(t *testing.T) {
 	}
 	if got := runtimeTaskExecutionProvider(cloud.RuntimeConfigSnapshot{ExecutionMode: cloud.RuntimeExecutionLive}); got != taskexecution.ProviderActiveCheckout {
 		t.Fatalf("live provider=%q want %q", got, taskexecution.ProviderActiveCheckout)
+	}
+}
+
+func TestRuntimeTaskWorktreeLimitDefaultsForUpgrades(t *testing.T) {
+	if got := runtimeTaskWorktreeLimit(cloud.RuntimeConfigSnapshot{}); got != 3 {
+		t.Fatalf("missing setting limit=%d want 3", got)
+	}
+	snapshot := cloud.RuntimeConfigSnapshot{Values: map[string]string{taskexecution.RuntimeSettingMaxWorktrees: "7"}}
+	if got := runtimeTaskWorktreeLimit(snapshot); got != 7 {
+		t.Fatalf("configured limit=%d want 7", got)
 	}
 }
 

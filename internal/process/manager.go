@@ -427,6 +427,25 @@ func (m *Manager) settled(record *Record) {
 	}
 }
 
+func (m *Manager) RunningWithin(root string) bool {
+	root = filepath.Clean(strings.TrimSpace(root))
+	if root == "." || root == "" {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, record := range m.records {
+		if record.Status != StatusRunning {
+			continue
+		}
+		relative, err := filepath.Rel(root, filepath.Clean(record.CWD))
+		if err == nil && (relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) displayCWD(record *Record) string {
 	if record == nil {
 		return "."

@@ -100,7 +100,7 @@ func (s *Server) blogAPIIdentity(w http.ResponseWriter, r *http.Request, mutatio
 	if !ok {
 		return nil, false
 	}
-	if mutation && !s.WebAuth.VerifyCSRF(r) {
+	if mutation && !s.WebAuth.VerifySessionCSRF(r, identity) {
 		webutil.JSON(w, http.StatusForbidden, map[string]string{"error": "invalid_csrf"})
 		return nil, false
 	}
