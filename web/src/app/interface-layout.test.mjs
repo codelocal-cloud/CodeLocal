@@ -117,4 +117,25 @@ const landing = read("./page.tsx");
 assert.match(landing, /src="\/codelocal-icon.png"/);
 assert.match(landing, /href="\/dashboard"/);
 assert.match(landing, /href="\/security"/);
-console.log("Interface source checks passed: contrast, graphs, navigation, Plugin CRUD, sessions, drawer keyboard and branded icons.");
+// Keep live workspace/device/graph/forum actions while polishing their surfaces.
+const workspaces = read("./dashboard/workspaces/workspaces-live.tsx");
+const devices = read("./dashboard/devices/devices-live.tsx");
+const codeGraph = read("./dashboard/code-graph/code-graph-live.tsx");
+const forums = read("./dashboard/forums/forums-hub.tsx");
+for (const [source, expected] of [
+  [workspaces, 'useDashboardResource("/api/v1/workspaces"'],
+  [workspaces, 'onClick={install}'],
+  [workspaces, 'href={`/dashboard/code-graph?deviceId='],
+  [devices, 'useDashboardResource("/api/v1/devices"'],
+  [devices, 'onClick={() => setSelectedID(device.deviceId)}'],
+  [codeGraph, 'onSubmit={submitQuery}'],
+  [forums, 'onSubmit={createTopic}'],
+  [forums, 'setComposerOpen((open) => !open)'],
+]) {
+  assert.ok(source.includes(expected), `UI-only migration must preserve interaction: ${expected}`);
+}
+assert.ok(declarations("./dashboard/neural-graph-stage.module.css", ".controls button:focus-visible", "outline").some((x) => x.includes("2px")), "Graph controls need a visible keyboard focus ring");
+for (const selector of [".workspaceCard", ".deviceShell"]) {
+  assert.ok(declarations("./dashboard/dashboard.module.css", selector, "border-radius").includes("19px"), `Expected consistent premium ${selector} surface`);
+}
+console.log("Interface source checks passed: contrast, navigation, Plugin CRUD, accounts, mobile drawer, branded icons, workspace/device/graph/forum workflows.");

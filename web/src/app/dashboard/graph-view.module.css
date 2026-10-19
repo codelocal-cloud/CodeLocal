@@ -34,7 +34,7 @@
   height: 44px;
   padding: 0 12px 0 34px;
   border: 1px solid rgba(255,255,255,.085);
-  border-radius: 8px;
+  border-radius: 13px;
   outline: 0;
   color: rgba(242,246,252,.86);
   background: var(--surface-sunken);
@@ -45,7 +45,7 @@
 }
 
 .search::placeholder { color: rgba(214, 225, 241, 0.85); }
-.search:focus { border-color: rgba(111,139,255,.34); box-shadow: 0 10px 28px rgba(0,0,0,.18), 0 0 0 3px rgba(76,101,255,.055); }
+.search:focus { border-color: rgba(182,243,211,.36); box-shadow: 0 10px 28px rgba(0,0,0,.18), 0 0 0 3px rgba(182,243,211,.07); }
 
 .searchIcon {
   position: absolute;
@@ -68,7 +68,7 @@
   align-items: center;
   padding: 7px 9px;
   border: 1px solid rgba(255,255,255,.07);
-  border-radius: 8px;
+  border-radius: 12px;
   color: rgba(204, 217, 236, 0.85);
   background: var(--surface-sunken);
   backdrop-filter: blur(16px);
@@ -84,7 +84,7 @@
   overflow: auto;
   padding: 18px;
   border: 1px solid rgba(255,255,255,.075);
-  border-radius: 8px;
+  border-radius: 18px;
   background: var(--surface);
   box-shadow: 0 22px 60px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.03);
   backdrop-filter: blur(24px);
@@ -92,11 +92,11 @@
 
 .inspectorHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .identity { min-width: 0; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 11px; align-items: center; }
-.avatar { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--node-color) 40%, rgba(255,255,255,.07)); border-radius: 8px; color: rgba(246,250,255,.88); background: color-mix(in srgb, var(--node-color) 12%, rgba(8,14,24,.9)); }
+.avatar { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--node-color) 40%, rgba(255,255,255,.07)); border-radius: 13px; color: rgba(246,250,255,.88); background: color-mix(in srgb, var(--node-color) 12%, rgba(8,14,24,.9)); }
 .avatar svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; }
 .identity small { color: rgba(207, 219, 237, 0.85); font-size: 12px; text-transform: uppercase; letter-spacing: 0; }
 .identity h3 { min-width: 0; margin: 4px 0 0; overflow-wrap: anywhere; color: rgba(251,252,255,.9); font-size: 15px; font-weight: 620; line-height: 1.25; letter-spacing: 0; }
-.close { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(210, 222, 240, 0.85); background: transparent; cursor: pointer; }
+.close { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 12px; color: rgba(210, 222, 240, 0.85); background: transparent; cursor: pointer; }
 .close:hover { color: rgba(255,255,255,.82); background: rgba(255,255,255,.05); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 15px; }
 .chips span { padding: 5px 8px; border: 1px solid rgba(255,255,255,.065); border-radius: 999px; color: rgba(208, 220, 238, 0.85); background: rgba(255,255,255,.02); font-size: 14px; }

@@ -2,7 +2,7 @@
 
 Date: 2026-10-18
 Branch: `staging` (existing npm beta branch, synchronized with `main` without discarding prior Jev/beta commits)
-Status: Phase 1 implementation in progress
+Status: VNext staged UI implementation ongoing; backend-authenticated UAT pending
 
 ## Business analysis and boundaries
 
@@ -40,3 +40,27 @@ Status: Phase 1 implementation in progress
 - Required web checks from `web/AGENTS.md`: `npm run lint`, `npm run typecheck`, `npm run build`, `npm audit --omit=dev`; also `npm run test:ui` for source-level regression.
 - Browser visual QA is **NOT RUN** until actually observed in a browser at each target viewport; source-level tests are not a substitute.
 - `staging` already publishes an npm **beta** artifact on workflow triggers. Check workflow effects and CI before pushing. Do not merge to `main` or ship production without approval and verification.
+## 2026-10-19: UI-only continuation — workspaces, devices, graphs and forums
+
+- **Scope:** CSS Modules only for `dashboard.module.css`, `graph-view.module.css`, `neural-graph-stage.module.css` and `forums/forums.module.css`. The extra changes in `interface-layout.test.mjs` are source-level regression assertions only.
+- **Workspaces:** Larger mint folder icons, premium 19px cards, clear keyboard focus, touch-sized chat action and unchanged active/sleeping/offline semantics.
+- **Devices:** Matching list and detail visuals, larger glyphs and mint-selected state; online/revoked state colors remain semantically distinct.
+- **Project Brain / Code Graph:** Original CodeLocal mint focus, rounded stage and inspector, **visible keyboard focus ring** on canvas controls. Graph pan/zoom/search interaction untouched.
+- **Forums:** Charcoal/mint container styling and large category icons; severity/bug/error badge meaning preserved. Composer, upload, publishing, voting, moderation endpoints untouched.
+- **Functional parity:** No React/Go/API/business-handler modifications in this continuation batch. New source tests explicitly guard project install links, device selection, graph query submit and forum creation handlers.
+
+### Quality evidence / remaining blockers
+
+| Gate | Evidence | Result |
+| --- | --- | --- |
+| UI source regressions | `npm run test:ui` including current interaction guards | PASS |
+| TypeScript | `npm run typecheck` | PASS |
+| Next.js build | `npm run build` | PASS |
+| Lint | `npm run lint`; one pre-existing `social-card.tsx` image warning | PASS with warning |
+| Production dependency audit | `npm audit --omit=dev` | PASS, zero reported vulnerabilities |
+| Git structure | `git diff --check` | PASS |
+| Local browser route | Chromium opened `/dashboard/workspaces`; sidebar/nav and fallback error UI rendered | PARTIAL |
+| Authenticated backend UAT | Local `/api/v1/workspaces`, `/api/v1/account`, `/api/v1/devices` returned 500 without usable backend | BLOCKED |
+| 390/768/1024/1440 px visual QA, Safari, real login | No complete captured device/authenticated matrix | NOT RUN |
+
+**Release rule:** Keep the existing staging beta publishing trigger dormant until the authenticated backend can be tested and visual QA is complete. Never interpret source/build PASS as real connected end-to-end PASS.

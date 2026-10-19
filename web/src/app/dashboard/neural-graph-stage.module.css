@@ -5,9 +5,9 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.075);
-  border-radius: 8px;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at 50% 44%, rgba(87, 107, 153, .075), transparent 40%),
+    radial-gradient(circle at 50% 44%, rgba(112, 214, 173, .065), transparent 40%),
     linear-gradient(rgba(130, 147, 178, .018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(130, 147, 178, .018) 1px, transparent 1px),
     #080b10;
@@ -29,14 +29,14 @@
   gap: 3px;
   padding: 4px;
   border: 1px solid rgba(255,255,255,.075);
-  border-radius: 8px;
+  border-radius: 13px;
   background: var(--surface-sunken);
   box-shadow: 0 10px 28px rgba(0,0,0,.17), inset 0 1px rgba(255,255,255,.025);
   backdrop-filter: blur(20px);
 }
-.controls button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(211, 223, 241, 0.85); background: transparent; font: 600 14px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; cursor: pointer; }
-.controls button:hover,
-.controls button:focus-visible { outline: 0; color: rgba(255,255,255,.88); background: rgba(255,255,255,.055); }
+.controls button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 10px; color: rgba(211, 223, 241, 0.85); background: transparent; font: 600 14px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; cursor: pointer; }
+.controls button:hover { color: rgba(255,255,255,.88); background: rgba(182,243,211,.075); }
+.controls button:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 2px; color: var(--brand-accent); background: rgba(182,243,211,.075); }
 
 .legend {
   position: absolute;
@@ -50,7 +50,7 @@
   gap: 7px 11px;
   padding: 7px 9px;
   border: 1px solid rgba(255,255,255,.065);
-  border-radius: 8px;
+  border-radius: 13px;
   color: rgba(207, 219, 237, 0.85);
   background: var(--surface-sunken);
   box-shadow: 0 9px 24px rgba(0,0,0,.14);
@@ -62,7 +62,7 @@
 .empty { position: absolute; z-index: 4; inset: 0; display: grid; place-items: center; color: rgba(211, 223, 241, 0.85); font-size: 14px; pointer-events: none; }
 
 @media (max-width: 760px) {
-  .stage { min-height: 0; border-radius: 8px; }
+  .stage { min-height: 0; border-radius: 16px; }
   .compact { min-height: 260px; }
   .legend { right: 10px; bottom: 10px; max-width: calc(100% - 20px); }
 }

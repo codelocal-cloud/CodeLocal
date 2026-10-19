@@ -2258,8 +2258,8 @@
 .brainHealthDisclosure {
   width: min(100%, var(--dashboard-content));
   margin: 12px auto 0;
-  border: 1px solid rgba(255,255,255,.065);
-  border-radius: 8px;
+  border: 1px solid rgba(182,243,211,.12);
+  border-radius: 16px;
   background: rgba(255,255,255,.018);
 }
 
@@ -2309,7 +2309,7 @@
 .workspaceCard {
   position: relative;
   min-width: 0;
-  min-height: 210px;
+  min-height: 220px;
   display: flex;
   border: 1px solid rgba(255,255,255,.075);
   border-radius: 8px;
@@ -2319,8 +2319,8 @@
 }
 .workspaceCard:has(.workspaceOverflow[open]) { z-index: 4; }
 .workspaceCard:hover { transform: translateY(-2px); border-color: rgba(106,132,255,.2); background: var(--surface); }
-.workspaceChatLink { min-width: 0; flex: 1; display: flex; flex-direction: column; padding: 16px; border-radius: inherit; text-decoration: none; }
-.workspaceFolderLarge { position: relative; width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.075); border-radius: 8px; background: rgba(255,255,255,.035); color: #7fa6ff; }
+.workspaceChatLink { min-width: 0; flex: 1; display: flex; flex-direction: column; padding: 20px; border-radius: inherit; text-decoration: none; }
+.workspaceFolderLarge { position: relative; width: 52px; height: 52px; display: grid; place-items: center; border: 1px solid rgba(182,243,211,.16); border-radius: 15px; background: rgba(182,243,211,.07); color: var(--brand-accent); }
 .workspaceFolderLarge svg { width: 25px; height: 25px; fill: rgba(90,133,255,.13); stroke: currentColor; stroke-width: 1.5; }
 .workspaceFolderLarge > i { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border: 2px solid var(--dashboard-sidebar, #171717); border-radius: 50%; background: var(--green); }
 .workspaceFolderLarge[data-state="sleeping"] { color: #d9ad64; }
@@ -2331,7 +2331,7 @@
 .workspaceCardBody h2 { min-width: 0; overflow: hidden; margin: 0; color: rgba(255,255,255,.91); font-size: 15px; font-weight: 620; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
 .workspaceCardBody > span { min-width: 0; overflow: hidden; color: rgba(219, 229, 243, 0.85); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .workspaceCardBody small { display: block; color: rgba(205, 216, 232, 0.85); font-size: 12px; }
-.workspaceChatAction { min-height: 36px; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: var(--radius-control); background: rgba(255,255,255,.018); color: var(--text-secondary); font-size: 14px; font-weight: 570; }
+.workspaceChatAction { min-height: 44px; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding: 0 13px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(182,243,211,.05); color: var(--text-secondary); font-size: 14px; font-weight: 570; }
 .workspaceChatLink:hover .workspaceChatAction { color: var(--text); border-color: rgba(139,168,255,.28); background: var(--accent-soft); }
 .workspaceCardActions { position: absolute; z-index: 2; top: 11px; right: 11px; }
 .workspaceOverflow { position: relative; }
@@ -2364,8 +2364,8 @@
 .deviceListItem,
 .deviceListItemActive { width: 100%; min-height: 58px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 8px 9px; border: 1px solid transparent; border-radius: 8px; text-align: left; background: transparent; color: inherit; cursor: pointer; }
 .deviceListItem:hover { background: rgba(255,255,255,.03); }
-.deviceListItemActive { border-color: rgba(100,125,255,.18); background: rgba(80,96,211,.13); }
-.deviceGlyph { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.065); border-radius: 8px; background: rgba(255,255,255,.03); color: #7da3ff; }
+.deviceListItemActive { border-color: rgba(182,243,211,.22); background: rgba(182,243,211,.09); }
+.deviceGlyph { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid rgba(182,243,211,.14); border-radius: 13px; background: rgba(182,243,211,.065); color: var(--brand-accent); }
 .deviceGlyph svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .deviceListItem strong,
 .deviceListItemActive strong { display: block; overflow: hidden; color: rgba(255,255,255,.82); font-size: 14px; font-weight: 590; text-overflow: ellipsis; white-space: nowrap; }
@@ -2377,7 +2377,7 @@
 .deviceDetail { min-width: 0; padding: clamp(24px, 3vw, 42px); }
 .deviceDetailHead { display: flex; align-items: center; gap: 16px; padding-bottom: 28px; border-bottom: 1px solid rgba(255,255,255,.055); }
 .deviceDetailHead > div { min-width: 0; overflow-wrap: anywhere; }
-.deviceHeroIcon { width: 68px; height: 54px; display: grid; place-items: center; border: 1px solid rgba(118,146,255,.16); border-radius: 8px; background: var(--surface); color: #8bafff; }
+.deviceHeroIcon { width: 68px; height: 60px; display: grid; place-items: center; border: 1px solid rgba(182,243,211,.18); border-radius: 17px; background: rgba(182,243,211,.06); color: var(--brand-accent); }
 .deviceHeroIcon svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.4; }
 .deviceDetailHead h2 { margin: 0 0 7px; color: rgba(255,255,255,.93); font-size: 23px; font-weight: 630; letter-spacing: 0; }
 .deviceDetailHead p { margin: 0; }
@@ -2522,17 +2522,24 @@
 
 .workspaceCard:hover {
   transform: none;
-  border-color: var(--line-strong);
-  background: rgba(255, 255, 255, 0.022);
+  border-color: rgba(182, 243, 211, .25);
+  background: var(--surface-raised);
 }
+
+/* VNext surface polish: no change to workspace/device actions or route behavior. */
+.workspaceCard { border-radius: 19px; }
+.deviceShell { border-radius: 19px; }
+.workspaceCard:focus-within,
+.deviceListItem:focus-visible,
+.deviceListItemActive:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 2px; }
 
 .workspaceFolderLarge,
 .deviceGlyph,
 .deviceHeroIcon {
-  color: #9bacc5;
-  border-color: var(--line);
-  border-radius: var(--radius-control);
-  background: rgba(255, 255, 255, 0.018);
+  color: var(--brand-accent);
+  border-color: rgba(182,243,211,.16);
+  border-radius: 15px;
+  background: rgba(182,243,211,.07);
 }
 
 .workspaceFolderLarge svg,
