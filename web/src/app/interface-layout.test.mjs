@@ -66,4 +66,55 @@ assert.ok(declarations(dashboardChrome, ".rail", "display").includes("none"), "M
 assert.ok(declarations(dashboardChrome, ".sidebarPanel", "overflow-y").includes("auto"), "Sidebar menu must remain scrollable");
 assert.ok(declarations(dashboardChrome, ".railLink", "min-height").includes("50px"), "Quick links need touch-sized targets");
 assert.ok(read("./dashboard/plugins/plugins-hub.tsx").includes('t("Extend CodeLocal with reusable tools and external data.")'));
-console.log("Interface source checks passed: contrast, graph sizing, responsive rail, toolbar and upload focus.");
+// Regression contract: a visual redesign must keep the original authenticated flows.
+const plugins = read("./dashboard/plugins/plugins-hub.tsx");
+for (const endpoint of [
+  'fetch("/api/v1/plugins"',
+  'fetch("/api/v1/account"',
+  'fetch("/api/v1/workspaces"',
+  '/install',
+  '/oauth',
+  '/connections',
+]) {
+  assert.ok(plugins.includes(endpoint), `Visual redesign removed Plugin API flow: ${endpoint}`);
+}
+for (const behavior of [
+  'onClick={openDialog}',
+  '<PluginConnectDialog',
+  'install={install}',
+  'uninstall={uninstall}',
+  'connect={connect}',
+  'disconnect={disconnect}',
+  'data-ready={connected ? "true" : undefined}',
+]) {
+  assert.ok(plugins.includes(behavior), `Visual redesign changed Plugin interaction: ${behavior}`);
+}
+const nav = read("./dashboard/dashboard-nav.tsx");
+for (const behavior of [
+  'readyAccount?.isAdmin',
+  'href="/dashboard/account"',
+  'method="post" action="/logout"',
+  'name="csrf" value={readyAccount.csrf}',
+  'onClick={onNavigate}',
+]) {
+  assert.ok(nav.includes(behavior), `Dashboard interaction missing: ${behavior}`);
+}
+for (const behavior of [
+  'event.key === "Escape"',
+  'event.key !== "Tab"',
+  'document.body.style.overflow = "hidden"',
+  'desktop.addEventListener("change", handleResize)',
+  'aria-modal={open || undefined}',
+  'onClick={close}',
+]) {
+  assert.ok(dashboardSidebar.includes(behavior), `Mobile drawer behavior missing: ${behavior}`);
+}
+const pluginBrand = read("./dashboard/plugins/plugin-brand-icon.tsx");
+assert.ok(pluginBrand.includes('key === "github"'), "Recognized icon names must match exactly");
+assert.ok(!pluginBrand.includes('key.includes('), "Do not show trusted vendor marks on similarly named custom Plugins");
+assert.ok(pluginBrand.includes("name.slice(0, 2).toUpperCase()"), "Unknown Plugins must retain their original monogram fallback");
+const landing = read("./page.tsx");
+assert.match(landing, /src="\/codelocal-icon.png"/);
+assert.match(landing, /href="\/dashboard"/);
+assert.match(landing, /href="\/security"/);
+console.log("Interface source checks passed: contrast, graphs, navigation, Plugin CRUD, sessions, drawer keyboard and branded icons.");
