@@ -3,7 +3,7 @@
   min-height: 100dvh;
   overflow: auto;
   padding: var(--dashboard-page-y) var(--dashboard-page-x) 36px;
-  background: radial-gradient(ellipse at 75% 0, rgba(104, 91, 189, 0.055), transparent 46%);
+  background: radial-gradient(ellipse at 75% 0, rgba(112, 214, 173, 0.035), transparent 46%);
 }
 
 .header,
@@ -77,7 +77,7 @@
   padding: 0 11px;
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 12px;
-  background: rgba(171, 175, 240, 0.035);
+  background: rgba(182, 243, 211, 0.025);
   color: rgba(195, 209, 230, 0.85);
 }
 
@@ -107,7 +107,7 @@
   padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 12px;
-  background: rgba(171, 175, 240, 0.035);
+  background: rgba(182, 243, 211, 0.025);
 }
 
 .tabs button,
@@ -141,7 +141,7 @@
 }
 
 .tabs .activeTab {
-  background: rgba(126, 117, 227, 0.18);
+  background: rgba(182, 243, 211, 0.14);
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 3px 10px rgba(0, 0, 0, 0.16);
 }
 
@@ -210,7 +210,7 @@
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.065);
   border-radius: 16px;
-  background: linear-gradient(155deg, rgba(144, 139, 226, 0.035), transparent 58%), var(--surface);
+  background: linear-gradient(155deg, rgba(182, 243, 211, 0.03), transparent 58%), var(--surface);
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
   transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
 }
@@ -222,7 +222,7 @@
 }
 
 .pluginCard[data-installed="true"] {
-  border-color: rgba(146, 155, 246, 0.18);
+  border-color: rgba(182, 243, 211, 0.17);
 }
 
 .cardTop,
@@ -255,8 +255,8 @@
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 13px;
-  background: linear-gradient(140deg, rgba(127, 119, 231, 0.19), rgba(82, 111, 210, 0.10));
-  color: #c6c4ff;
+  background: linear-gradient(140deg, rgba(182, 243, 211, 0.15), rgba(112, 214, 173, 0.07));
+  color: #d0f9e2;
   font-size: 14px;
   font-weight: 680;
   letter-spacing: 0;
@@ -395,8 +395,8 @@
 }
 
 .primaryButton {
-  background: linear-gradient(125deg, rgba(101, 97, 207, 0.23), rgba(99, 116, 211, 0.12));
-  color: #eef0ff;
+  background: linear-gradient(125deg, rgba(182, 243, 211, 0.15), rgba(112, 214, 173, 0.06));
+  color: #f1f4f2;
 }
 
 .secondaryButton,

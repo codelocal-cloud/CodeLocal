@@ -20,7 +20,7 @@ Status: Phase 1 implementation in progress
 | Phase | Delivery | Acceptance |
 | --- | --- | --- |
 | 0. Foundation | Inspect existing staging history, merge `main` without history loss, bring in Master Skills | Git merge clean, Jev and npm beta workflow preserved |
-| 1. Shell | Two-tier desktop navigation (quick icon rail + fully labeled menu), indigo/violet dashboard tokens | All existing navigation links remain reachable; active route visible; mobile drawer unchanged behavior |
+| 1. Shell | Two-tier desktop navigation (quick icon rail + fully labeled menu), original CodeLocal charcoal/mint dashboard tokens | All existing navigation links remain reachable; active route visible; mobile drawer unchanged behavior |
 | 1. Plugin catalog | More legible app-like cards, clearer hierarchy and search controls | Real install/manage/status flows and error/retry unchanged, no fabricated integrations |
 | 1. QA | Lint, typecheck, UI unit tests, build, production npm dependency audit | No regression; screenshots and manual responsive checks tracked separately |
 | 2. MCP Connections | Better connection grouping for runtime/client settings and credentials | Preserve device trust, auth, reconnection and errors; compare against current route |
@@ -32,7 +32,7 @@ Status: Phase 1 implementation in progress
 
 - Desktop quick rail gives access to Overview, Chat, Projects, MCP Connections, Plugins, Skills and Settings. The longer panel retains **all** primary, secondary and admin/account actions.
 - Mobile keeps a single drawer, overlay, Escape, focus management and safe-area padding. The icon rail disappears at the mobile breakpoint.
-- Dashboard-only violet accent tokens avoid changing global auth or marketing screens. Connection success stays semantic green; errors stay red.
+- Dashboard tokens MUST inherit the original CodeLocal brand from `web/src/app/globals.css`: `--brand-canvas: #0b0d0e`, `--surface: #15191a`, `--surface-raised: #202627`, `--brand-accent: #b6f3d3`, `--accent-strong: #8ce2b8` and secondary cyan `#7fc7de`. iOS-inspired visual design means material and structure, not swapping the established mint/charcoal brand for violet. Connection success stays semantic green; errors stay red.
 - Plugin cards are styled but use existing real `PluginItem` / `PluginConnection` data and existing mutation handlers.
 
 ## Verification and release safety

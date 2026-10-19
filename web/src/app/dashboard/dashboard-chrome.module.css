@@ -1,33 +1,33 @@
 .shell {
-  --brand-canvas: #0e101a;
-  --brand-text: #f4f5fd;
-  --brand-muted: #a6acc4;
-  --brand-line: rgba(185, 190, 237, 0.12);
-  --brand-accent: #a5b4fc;
+  --brand-canvas: #0b0d0e;
+  --brand-text: #f1f4f2;
+  --brand-muted: #abb5b1;
+  --brand-line: rgba(255, 255, 255, 0.10);
+  --brand-accent: #b6f3d3;
   --canvas: var(--brand-canvas);
-  --canvas-soft: #151725;
-  --surface: #1a1c2c;
-  --surface-raised: #222539;
-  --surface-sunken: #121422;
-  --line: rgba(185, 190, 237, 0.12);
-  --line-strong: rgba(185, 190, 237, 0.22);
+  --canvas-soft: #101314;
+  --surface: #15191a;
+  --surface-raised: #202627;
+  --surface-sunken: #0e1112;
+  --line: rgba(255, 255, 255, 0.10);
+  --line-strong: rgba(255, 255, 255, 0.18);
   --text: var(--brand-text);
   --text-primary: var(--brand-text);
-  --text-secondary: #c1c5db;
-  --text-tertiary: #a3a9c5;
+  --text-secondary: #b7c1bc;
+  --text-tertiary: #9ca9a3;
   --accent: var(--brand-accent);
-  --accent-strong: #c5caff;
-  --accent-soft: rgba(132, 141, 246, 0.11);
-  --dashboard-surface: #1a1c2c;
-  --dashboard-sidebar: #131521;
-  --dashboard-popover: #242638;
+  --accent-strong: #8ce2b8;
+  --accent-soft: rgba(182, 243, 211, 0.10);
+  --dashboard-surface: #15191a;
+  --dashboard-sidebar: #121516;
+  --dashboard-popover: #202627;
   display: grid;
   grid-template-columns: 306px minmax(0, 1fr);
   min-width: 0;
   min-height: 100dvh;
   height: 100dvh;
   overflow: hidden;
-  background: radial-gradient(ellipse at 75% 0%, rgba(89, 79, 173, 0.07), transparent 45%), var(--brand-canvas);
+  background: radial-gradient(ellipse at 75% 0%, rgba(112, 214, 173, 0.05), transparent 45%), var(--brand-canvas);
   color: var(--brand-text);
   letter-spacing: 0;
 }
@@ -37,7 +37,7 @@
   min-width: 0;
   height: 100dvh;
   border-right: 1px solid var(--brand-line);
-  background: #131521;
+  background: #121516;
 }
 
 .rail {
@@ -48,7 +48,7 @@
   gap: 25px;
   padding: 20px 8px;
   border-right: 1px solid var(--brand-line);
-  background: #10111d;
+  background: #0e1112;
 }
 
 .railBrand {
@@ -57,7 +57,7 @@
   height: 44px;
   place-items: center;
   border-radius: 13px;
-  background: rgba(153, 142, 252, 0.1);
+  background: rgba(182, 243, 211, 0.09);
 }
 
 .railBrand img { border-radius: 9px; }
@@ -71,20 +71,20 @@
   place-items: center;
   border: 1px solid transparent;
   border-radius: 13px;
-  color: #9da3c2;
+  color: #9ca9a3;
   transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
 .railLink:hover,
 .railLink:focus-visible {
-  color: #e4e5ff;
-  background: rgba(155, 153, 241, 0.11);
+  color: #f1f4f2;
+  background: rgba(182, 243, 211, 0.08);
 }
 
 .railActive {
-  color: #ced0ff;
-  border-color: rgba(155, 153, 241, 0.2);
-  background: linear-gradient(140deg, rgba(110, 101, 227, 0.23), rgba(87, 100, 219, 0.12));
+  color: #d0f9e2;
+  border-color: rgba(182, 243, 211, 0.20);
+  background: linear-gradient(140deg, rgba(182, 243, 211, 0.14), rgba(112, 214, 173, 0.06));
 }
 
 .sidebarPanel {
@@ -121,7 +121,7 @@
 
 .navLabel {
   padding: 0 12px 7px;
-  color: #888fad;
+  color: #8d9c94;
   font: 11px var(--font-geist-mono), monospace;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -137,26 +137,26 @@
   border-radius: 10px;
   font-size: 13px;
   font-weight: 520;
-  color: #adb4ce;
+  color: #b6c0ba;
   transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
-.navLink svg { flex-shrink: 0; color: #8c97b9; }
-.navLink:hover { background: rgba(160, 164, 238, 0.08); color: var(--brand-text); }
+.navLink svg { flex-shrink: 0; color: #a0ada6; }
+.navLink:hover { background: rgba(182, 243, 211, 0.07); color: var(--brand-text); }
 
 .activeNav {
-  color: #e0e0ff;
-  border-color: rgba(156, 150, 247, 0.2);
-  background: linear-gradient(100deg, rgba(125, 114, 234, 0.16), rgba(96, 117, 228, 0.08));
+  color: #d0f9e2;
+  border-color: rgba(182, 243, 211, 0.20);
+  background: linear-gradient(100deg, rgba(182, 243, 211, 0.12), rgba(112, 214, 173, 0.06));
 }
 
-.activeNav svg { color: #b6adff; }
+.activeNav svg { color: #b6f3d3; }
 .activeNav i {
   width: 5px;
   height: 5px;
   margin-left: auto;
   border-radius: 50%;
-  background: #b6adff;
+  background: #b6f3d3;
 }
 
 .desktopCard {
@@ -165,7 +165,7 @@
   padding: 14px 12px;
   border: 1px solid var(--brand-line);
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(125, 112, 228, 0.08), rgba(88, 112, 220, 0.02));
+  background: linear-gradient(135deg, rgba(182, 243, 211, 0.07), rgba(112, 214, 173, 0.02));
 }
 
 .desktopCard > span { display: flex; align-items: center; justify-content: space-between; color: var(--brand-muted); }
@@ -177,7 +177,7 @@
 }
 .desktopCard strong { display: flex; justify-content: space-between; margin-top: 12px; font-size: 13px; font-weight: 600; }
 .desktopCard p { margin: 6px 0 0; color: var(--brand-muted); font-size: 12px; line-height: 1.55; }
-.desktopCard:hover { border-color: rgba(165, 180, 252, 0.32); }
+.desktopCard:hover { border-color: rgba(182, 243, 211, 0.28); }
 
 .account { position: relative; margin-top: auto; padding-top: 13px; border-top: 1px solid var(--brand-line); }
 .account summary { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 5px; list-style: none; cursor: pointer; }
@@ -189,10 +189,10 @@
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(165, 180, 252, 0.3);
+  border: 1px solid rgba(182, 243, 211, 0.26);
   border-radius: 11px;
-  background: rgba(132, 141, 246, 0.17);
-  color: #e5e7ff;
+  background: rgba(182, 243, 211, 0.15);
+  color: #d0f9e2;
   font-size: 12px;
   font-weight: 650;
 }
@@ -209,7 +209,7 @@
   padding: 6px;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  background: #242638;
+  background: #202627;
   box-shadow: 0 12px 36px #0008;
 }
 .accountMenu a,
@@ -260,7 +260,7 @@
     justify-content: space-between;
     padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
     border-bottom: 1px solid var(--brand-line);
-    background: #131521;
+    background: #121516;
   }
   .mobileBar .brand { font-size: 19px; }
   .mobileBar button,
