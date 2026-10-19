@@ -26,9 +26,9 @@
 }
 
 .heroIcon {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
 }
 
 .heroCopy { min-width: 0; }
@@ -82,8 +82,8 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.016);
+  border-radius: 17px;
+  background: rgba(182, 243, 211, 0.025);
 }
 
 .hubGroup h2 {
@@ -102,7 +102,7 @@
   min-width: 0;
   min-height: 58px;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -117,13 +117,13 @@
 }
 
 .hubIcon {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(182, 200, 237, 0.85);
+  border-radius: 13px;
+  background: rgba(182, 243, 211, 0.085);
+  color: var(--brand-accent);
 }
 
 .hubCopy {
@@ -189,7 +189,7 @@
   gap: 12px;
   padding: 9px 11px 9px 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--surface-sunken);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -222,7 +222,7 @@
   gap: 2px;
   padding: 3px;
   border: 1px solid rgba(151,172,211,.08);
-  border-radius: 8px;
+  border-radius: 13px;
   background: var(--surface-sunken);
 }
 
@@ -295,7 +295,7 @@
 .executionPanel {
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 18px;
   background: var(--surface);
   box-shadow: 0 18px 50px rgba(0,0,0,.12);
 }

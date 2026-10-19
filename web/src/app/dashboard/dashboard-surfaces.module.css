@@ -12,7 +12,7 @@
   overflow: visible;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 19px;
   background: var(--surface);
   box-shadow: 0 14px 42px rgba(0,0,0,.1);
 }
@@ -52,7 +52,7 @@
   width: 44px;
   height: 44px;
   flex: 0 0 auto;
-  border-radius: 10px;
+  border-radius: 14px;
 }
 
 .endpointActions {
@@ -68,7 +68,7 @@
   gap: 6px;
   padding: 0 9px;
   border: 1px solid rgba(255,255,255,.08);
-  border-radius: 8px;
+  border-radius: 12px;
   color: rgba(230,237,248,.86);
   background: rgba(255,255,255,.04);
   font-size: 12px;
@@ -169,8 +169,8 @@
   align-items: center;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  color: #ccd7e7;
+  border-radius: 12px;
+  color: #d9e9dd;
   background: var(--surface-sunken);
   font-family: var(--font-geist-mono), monospace;
   font-size: 14px;
@@ -179,15 +179,15 @@
 .button {
   min-height: 40px;
   padding: 0 13px;
-  border: 1px solid rgba(120,160,255,.22);
-  border-radius: 8px;
-  color: #e8effb;
-  background: rgba(83,128,239,.11);
+  border: 1px solid rgba(182,243,211,.22);
+  border-radius: 12px;
+  color: #e5faed;
+  background: rgba(182,243,211,.10);
   font-size: 14px;
   font-weight: 650;
   cursor: pointer;
 }
-.button:hover { border-color: rgba(120,160,255,.38); color: #fff; background: rgba(83,128,239,.17); }
+.button:hover { border-color: rgba(182,243,211,.38); color: #fff; background: rgba(182,243,211,.16); }
 
 .steps {
   display: grid;
@@ -262,12 +262,12 @@
   margin-top: 14px;
   padding: 0 11px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 12px;
   outline: 0;
   color: #e8edf3;
   background: var(--surface-sunken);
 }
-.search:focus { border-color: rgba(120,160,255,.6); box-shadow: 0 0 0 3px rgba(83,128,239,.07); }
+.search:focus { border-color: rgba(182,243,211,.60); box-shadow: 0 0 0 3px rgba(182,243,211,.08); }
 
 .adminTable { display: grid; margin-top: 16px; border-top: 1px solid var(--line); }
 .adminRow { min-height: 68px; display: grid; grid-template-columns: minmax(170px,1.2fr) .7fr .8fr .9fr; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -285,7 +285,7 @@
   .adminRow { grid-template-columns: 1fr 1fr; padding: 10px 0; }
 }
 @media (max-width:620px) {
-  .card { padding: 18px; border-radius: 8px; }
+  .card { padding: 18px; border-radius: 16px; }
   .cardHeader { align-items: flex-start; flex-direction: column; }
   .statusBadge { align-self: flex-start; }
   .codeRow { flex-direction: column; }
@@ -298,10 +298,9 @@
 /* Refined glass surfaces for Connections / Invite / Admin. */
 .card {
   border-color: rgba(255,255,255,.07);
-  border-radius: 8px;
+  border-radius: 19px;
   background: var(--surface);
   box-shadow: 0 18px 48px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.025);
-  backdrop-filter: blur(22px);
 }
 .title { color: rgba(255,255,255,.9); font-weight: 620; letter-spacing: 0; }
 .statusBadge { border-color: rgba(92,214,139,.14); background: rgba(64,171,105,.08); color: rgba(127, 229, 164, 0.85); }

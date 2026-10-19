@@ -159,8 +159,8 @@
 
 .primaryButton {
   border-color: rgba(255, 255, 255, 0.09) !important;
-  background: rgba(255, 255, 255, 0.075) !important;
-  color: rgba(249, 251, 255, 0.9) !important;
+  background: rgba(182, 243, 211, 0.13) !important;
+  color: #d9ffeb !important;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
 }
 
@@ -192,7 +192,7 @@
   margin-top: 14px;
   padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.065);
-  border-radius: 8px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.022);
 }
 
@@ -224,7 +224,7 @@
 .content {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 15px;
   margin-top: 18px;
 }
 
@@ -256,13 +256,13 @@
 
 .skillCard {
   min-width: 0;
-  min-height: 270px;
+  min-height: 250px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr);
   gap: 14px;
-  padding: 17px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid rgba(182, 243, 211, 0.12);
+  border-radius: 19px;
   background: var(--surface);
   box-shadow: 0 16px 42px rgba(0, 0, 0, 0.14), inset 0 1px rgba(255, 255, 255, 0.025);
   transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
@@ -275,14 +275,14 @@
 }
 
 .skillIcon {
-  width: 44px;
-  height: 44px;
+  width: 56px;
+  height: 56px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.028);
-  color: rgba(151, 176, 224, 0.9);
+  border-radius: 16px;
+  background: rgba(182, 243, 211, 0.085);
+  color: var(--brand-accent);
 }
 
 .skillIcon svg {

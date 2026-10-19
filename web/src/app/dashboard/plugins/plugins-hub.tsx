@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { isWorkspacesResource, type WorkspacesResource } from "@/lib/contracts/resources";
 import { AppIcon } from "../app-icon";
 import { PluginConnectDialog } from "./plugin-connect-dialog";
+import { PluginBrandIcon } from "./plugin-brand-icon";
 import { CustomMCPPanel } from "./custom-mcp-panel";
 import styles from "./plugins.module.css";
 
@@ -123,7 +124,6 @@ function PluginCard({
   const { t } = useTranslations();
   const capabilities = plugin.capabilities ?? [];
   const connections = plugin.connections ?? [];
-  const monogram = plugin.name.slice(0, 2).toUpperCase();
   const [dialogOpen, setDialogOpen] = useState(false);
   const cloudReady = connections.find((connection) => connection.executionTarget === "cloud" && connection.state === "ready");
   const deviceReady = connections.find((connection) => connection.executionTarget !== "cloud" && connection.state === "ready");
@@ -152,7 +152,7 @@ function PluginCard({
       <article className={styles.pluginCard} data-installed={plugin.installed || undefined}>
         <div className={styles.cardTop}>
           <div className={styles.pluginIdentity}>
-            <div className={styles.pluginIcon} aria-hidden="true">{monogram}</div>
+            <div className={styles.pluginIcon} aria-hidden="true"><PluginBrandIcon name={plugin.name} /></div>
             <div>
               <div className={styles.nameRow}>
                 <h2>{plugin.name}</h2>

@@ -15,6 +15,9 @@ const productLinks: { icon: AppIconName; title: string; copy: string; href: stri
   { icon: "folder", title: "Workspaces & devices", copy: "Projects, paired machines and connection status.", href: "/dashboard/workspaces" },
   { icon: "brain", title: "Project Brain", copy: "Project knowledge and the relationships behind your code.", href: "/dashboard/knowledge" },
   { icon: "skill", title: "Skills & experience", copy: "Reusable capabilities and lessons from verified work.", href: "/dashboard/skills" },
+  { icon: "chat", title: "AI Chat", copy: "Conversations connected to real project execution.", href: "/chat" },
+  { icon: "plugin", title: "Plugins & integrations", copy: "Discover, install and manage external tools.", href: "/dashboard/plugins" },
+  { icon: "connection", title: "MCP connections", copy: "Connect compatible AI clients to your workspace.", href: "/dashboard/connect" },
 ];
 const steps = [
   { title: "Install the runtime", copy: "On the machine where your code lives.", command: "npm install -g codelocal@latest" },

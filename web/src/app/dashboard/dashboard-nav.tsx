@@ -58,7 +58,7 @@ function NavLink({
       href={item.href}
       aria-current={active ? "page" : undefined}
     >
-      <AppIcon name={item.icon} size={18} />
+      <AppIcon name={item.icon} size={20} />
       <span>{t(item.label)}</span>
       {active && <i aria-hidden="true" />}
     </Link>

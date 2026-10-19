@@ -5,9 +5,9 @@
   overflow: hidden;
   padding: 12px;
   background:
-    radial-gradient(circle at 78% -12%, rgba(74, 103, 214, 0.12), transparent 34%),
-    #080a0f;
-  color: #fff;
+    radial-gradient(ellipse at 78% -12%, rgba(112, 214, 173, 0.09), transparent 42%),
+    #0b0d0e;
+  color: var(--brand-text);
 }
 
 @media (max-width: 820px) {

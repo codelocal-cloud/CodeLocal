@@ -134,7 +134,7 @@ export function DashboardSidebar() {
                   aria-current={active ? "page" : undefined}
                   title={t(item.label)}
                 >
-                  <AppIcon name={item.icon} size={20} />
+                  <AppIcon name={item.icon} size={24} />
                 </Link>
               );
             })}

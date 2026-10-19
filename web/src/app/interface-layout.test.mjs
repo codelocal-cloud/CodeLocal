@@ -64,6 +64,6 @@ assert.match(dashboardSidebar, /aria-current=\{active \? "page" : undefined\}/);
 assert.match(dashboardSidebar, /<DashboardNav onNavigate=/);
 assert.ok(declarations(dashboardChrome, ".rail", "display").includes("none"), "Mobile rail should be hidden");
 assert.ok(declarations(dashboardChrome, ".sidebarPanel", "overflow-y").includes("auto"), "Sidebar menu must remain scrollable");
-assert.ok(declarations(dashboardChrome, ".railLink", "min-height").includes("46px"), "Quick links need touch-sized targets");
+assert.ok(declarations(dashboardChrome, ".railLink", "min-height").includes("50px"), "Quick links need touch-sized targets");
 assert.ok(read("./dashboard/plugins/plugins-hub.tsx").includes('t("Extend CodeLocal with reusable tools and external data.")'));
 console.log("Interface source checks passed: contrast, graph sizing, responsive rail, toolbar and upload focus.");

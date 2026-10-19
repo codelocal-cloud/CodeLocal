@@ -18,8 +18,8 @@
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 24px;
   background:
-    radial-gradient(circle at 30% -8%, rgba(100, 128, 214, 0.09), transparent 35%),
-    linear-gradient(180deg, rgba(16, 23, 35, 0.86), rgba(9, 13, 21, 0.93));
+    radial-gradient(circle at 30% -8%, rgba(112, 214, 173, 0.09), transparent 35%),
+    linear-gradient(180deg, rgba(21, 27, 25, 0.9), rgba(11, 15, 13, 0.96));
   box-shadow: 0 22px 58px rgba(0, 0, 0, 0.24), inset 0 1px rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(26px) saturate(115%);
 }
@@ -42,7 +42,7 @@
 .threadSidebarHead span {
   color: rgba(140, 165, 219, 0.62);
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -64,7 +64,7 @@
   border-radius: 8px;
   background: rgba(94, 119, 205, 0.08);
   color: rgba(181, 201, 244, 0.72);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0;
 }
 
@@ -74,12 +74,12 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid rgba(114, 143, 255, 0.25);
+  border: 1px solid rgba(182, 243, 211, 0.25);
   border-radius: 12px;
-  background: linear-gradient(145deg, rgba(73, 104, 232, 0.26), rgba(70, 67, 205, 0.2));
-  color: rgba(231, 237, 255, 0.92);
+  background: linear-gradient(145deg, rgba(112, 214, 173, 0.2), rgba(62, 150, 112, 0.12));
+  color: rgba(237, 255, 243, 0.94);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 620;
   cursor: pointer;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.055);
@@ -88,8 +88,8 @@
 
 .newThreadButton:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(126, 154, 255, 0.42);
-  background: linear-gradient(145deg, rgba(82, 115, 243, 0.34), rgba(79, 76, 222, 0.27));
+  border-color: rgba(182, 243, 211, 0.42);
+  background: linear-gradient(145deg, rgba(112, 214, 173, 0.29), rgba(62, 150, 112, 0.20));
 }
 
 .newThreadButton:disabled {
@@ -123,7 +123,7 @@
   background: transparent;
   color: rgba(235, 240, 249, 0.86);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 13px;
 }
 
 .threadSearch input::placeholder { color: rgba(197, 210, 232, 0.31); }
@@ -148,7 +148,7 @@
   margin: 0;
   padding: 0 7px 4px;
   color: rgba(179, 195, 222, 0.36);
-  font-size: 8.5px;
+  font-size: 11px;
   font-weight: 660;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -169,8 +169,8 @@
 }
 
 .threadItemActive {
-  border-color: rgba(112, 143, 255, 0.16);
-  background: linear-gradient(100deg, rgba(77, 105, 209, 0.13), rgba(60, 74, 130, 0.05));
+  border-color: rgba(182, 243, 211, 0.16);
+  background: linear-gradient(100deg, rgba(112, 214, 173, 0.12), rgba(58, 105, 80, 0.04));
 }
 
 .threadItemActive::before {
@@ -181,8 +181,8 @@
   bottom: 10px;
   width: 2px;
   border-radius: 999px;
-  background: #718cff;
-  box-shadow: 0 0 12px rgba(113, 140, 255, 0.68);
+  background: #b6f3d3;
+  box-shadow: 0 0 12px rgba(182, 243, 211, 0.35);
 }
 
 .threadSelect {
@@ -208,13 +208,13 @@
 .threadSelect span {
   overflow: hidden;
   color: rgba(225, 232, 244, 0.7);
-  font-size: 10.5px;
+  font-size: 13px;
   font-weight: 520;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.threadItemActive .threadSelect { color: rgba(154, 179, 255, 0.86); }
+.threadItemActive .threadSelect { color: rgba(182, 243, 211, 0.86); }
 .threadItemActive .threadSelect span { color: rgba(245, 247, 252, 0.91); }
 
 .threadItemActions {
@@ -253,7 +253,7 @@
 .threadEmpty {
   margin: 18px 8px;
   color: rgba(195, 207, 227, 0.36);
-  font-size: 10.5px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -264,12 +264,12 @@
   padding: 0 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.045);
   color: rgba(180, 195, 219, 0.3);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .chatShell {
   --chat-border: rgba(255, 255, 255, 0.085);
-  --chat-surface: rgba(14, 20, 31, 0.72);
+  --chat-surface: rgba(19, 25, 22, 0.88);
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
@@ -279,8 +279,8 @@
   border: 1px solid var(--chat-border);
   border-radius: 28px;
   background:
-    radial-gradient(circle at 72% -8%, rgba(103, 128, 205, 0.055), transparent 34%),
-    linear-gradient(180deg, rgba(13, 18, 27, 0.9), rgba(8, 11, 17, 0.95));
+    radial-gradient(circle at 72% -8%, rgba(112, 214, 173, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(18, 24, 21, 0.95), rgba(11, 14, 12, 0.98));
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.26), inset 0 1px rgba(255, 255, 255, 0.032);
   backdrop-filter: blur(26px) saturate(112%);
 }
@@ -295,7 +295,7 @@
   gap: 18px;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(10, 15, 24, 0.54);
+  background: rgba(12, 18, 15, 0.72);
   backdrop-filter: blur(24px);
 }
 
@@ -437,7 +437,7 @@
   background: rgba(255, 255, 255, 0.028);
   color: rgba(205, 214, 232, 0.72);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
@@ -581,7 +581,7 @@
 
 .modelOption span {
   overflow: hidden;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 620;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -590,7 +590,7 @@
 .modelOption small {
   overflow: hidden;
   color: rgba(255, 255, 255, 0.38);
-  font-size: 9px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -624,7 +624,7 @@
 .manageAIButton:hover,
 .manageAIButton:focus-visible { background: rgba(255, 255, 255, 0.07); color: #fff; }
 .manageAIButton > span { min-width: 0; display: grid; gap: 2px; }
-.manageAIButton strong { font-size: 11.5px; font-weight: 620; }
+.manageAIButton strong { font-size: 13px; font-weight: 620; }
 .manageAIButton small { color: rgba(180, 180, 186, 0.62); font-size: 9.5px; }
 
 .projectPicker select {
@@ -691,7 +691,7 @@
   display: grid;
   place-items: center;
   color: rgba(207, 219, 239, 0.34);
-  font-size: 10.5px;
+  font-size: 13px;
 }
 
 .emptyState {
@@ -752,7 +752,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.035);
   color: rgba(229, 237, 249, 0.65);
-  font-size: 11.5px;
+  font-size: 13px;
   cursor: pointer;
   transition: transform 150ms ease, background 150ms ease, color 150ms ease;
 }
@@ -845,7 +845,7 @@
   align-items: center;
   gap: 8px;
   color: rgba(213, 225, 247, 0.69);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 540;
 }
 
@@ -859,7 +859,7 @@
 
 .toolMeta {
   color: rgba(118, 205, 148, 0.72);
-  font-size: 10.5px;
+  font-size: 13px;
 }
 
 .toolDetail {
@@ -875,7 +875,7 @@
   border-radius: 9px;
   background: rgba(0, 0, 0, 0.24);
   color: rgba(205, 219, 243, 0.65);
-  font-size: 10.5px;
+  font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -1102,7 +1102,7 @@
   background: transparent;
   color: rgba(226, 233, 245, 0.78);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 13px;
 }
 
 .goalField input::placeholder { color: rgba(202, 214, 233, 0.32); }
@@ -1263,7 +1263,7 @@
 
 .toolName {
   gap: 6px;
-  font-size: 10.5px;
+  font-size: 13px;
 }
 
 .toolDot {
@@ -1502,7 +1502,7 @@
   overflow: hidden;
   color: rgba(163, 182, 226, 0.72);
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -1655,7 +1655,7 @@
   background: rgba(75, 101, 220, 0.14);
   color: rgba(205, 218, 255, 0.92);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 13px;
   font-weight: 620;
   white-space: nowrap;
   cursor: pointer;
@@ -1821,7 +1821,7 @@
 .threadGroup h2 {
   padding: 0 8px 4px;
   color: rgba(180, 180, 186, 0.55);
-  font-size: 10.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
   text-transform: none;
@@ -1910,7 +1910,7 @@
   border: 0;
   background: transparent;
   color: rgba(180, 180, 186, 0.72);
-  font-size: 11.5px;
+  font-size: 13px;
 }
 
 .projectPicker,
@@ -2374,7 +2374,7 @@
   .modelPickerCount { display: none; }
   .projectPicker { width: 48%; padding: 0 6px; }
   .projectPicker select { width: 100%; font-size: 11px; }
-  .modelPickerName { max-width: none; font-size: 11.5px; }
+  .modelPickerName { max-width: none; font-size: 13px; }
 
   .chatShell .chatForm {
     width: calc(100dvw - 26px);

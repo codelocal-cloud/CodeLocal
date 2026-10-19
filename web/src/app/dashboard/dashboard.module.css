@@ -189,7 +189,7 @@
 
 .content {
   min-width: 0;
-  padding: 20px 28px 42px;
+  padding: 26px clamp(18px, 3vw, 40px) 48px;
 }
 
 .header {
@@ -274,7 +274,7 @@
   gap: 40px;
   margin: 0 auto 18px;
   padding: 28px;
-  border-radius: 8px;
+  border-radius: 22px;
 }
 
 .heroPanel::after {
@@ -307,7 +307,7 @@
   margin: 0 auto 10px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 20px;
   background: var(--surface);
   box-shadow: 0 18px 54px rgba(0,0,0,.11);
 }

@@ -42,7 +42,7 @@
 
 .rail {
   display: flex;
-  flex: 0 0 64px;
+  flex: 0 0 68px;
   flex-direction: column;
   align-items: center;
   gap: 25px;
@@ -66,8 +66,8 @@
 
 .railLink {
   display: grid;
-  width: 46px;
-  min-height: 46px;
+  width: 50px;
+  min-height: 50px;
   place-items: center;
   border: 1px solid transparent;
   border-radius: 13px;
