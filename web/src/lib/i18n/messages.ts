@@ -1232,6 +1232,8 @@ export const messages = {
   "Brain views": ["Chế độ xem Brain", "Brain 视图", "Brain दृश्य"],
   "Code": ["Mã nguồn", "代码", "कोड"],
   "Embedded workspace blocked?": ["Workspace nhúng bị chặn?", "嵌入式工作区被阻止？", "एम्बेड किया गया कार्यक्षेत्र अवरुद्ध है?"],
+  "To edit with AI, connect an open Penpot file": ["Để AI chỉnh sửa, hãy kết nối một file Penpot đang mở", "要让 AI 编辑，请连接一个已打开的 Penpot 文件", "AI से संपादित करने के लिए खुली Penpot फ़ाइल कनेक्ट करें"],
+  "Open a design file, choose File → MCP Server → Connect, and keep that tab active. The MCP server being online does not mean the canvas is connected.": ["Mở file thiết kế, chọn File → MCP Server → Connect và giữ tab hoạt động. Máy chủ MCP đang online không có nghĩa là canvas đã kết nối.", "打开设计文件，选择 文件 → MCP 服务器 → 连接，并保持该标签页处于活动状态。MCP 服务在线不代表画布已连接。", "डिज़ाइन फ़ाइल खोलें, File → MCP Server → Connect चुनें और टैब सक्रिय रखें। MCP सर्वर ऑनलाइन होने का अर्थ यह नहीं कि कैनवास जुड़ा है।"],
   "Open Penpot in a new tab": ["Mở Penpot trong tab mới", "在新标签页打开 Penpot", "Penpot नए टैब में खोलें"],
   "Both use the same CodeLocal SSO.": ["Cả hai dùng cùng CodeLocal SSO.", "两者使用同一个 CodeLocal SSO。", "दोनों में वही CodeLocal SSO उपयोग होता है।"],
   "CodeLocal Penpot Design Workspace": ["Workspace thiết kế Penpot của CodeLocal", "CodeLocal Penpot 设计工作区", "CodeLocal Penpot डिज़ाइन कार्यक्षेत्र"],

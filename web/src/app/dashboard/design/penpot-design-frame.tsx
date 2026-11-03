@@ -117,7 +117,20 @@ export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
             retryLater();
             return;
           }
-          if (response.ok) connectedRef.current.add(key);
+          if (response.ok) {
+            // A 200 means the configuration was saved, not necessarily usable.
+            // The backend may return state="configured"/"error" when its MCP
+            // probe failed. Do not permanently suppress retries in that case.
+            const payload: unknown = await response.json().catch(() => null);
+            if (controller.signal.aborted || token !== tokenRef.current) return;
+            if (payload && typeof payload === "object" && "connection" in payload) {
+              const connection = payload.connection;
+              if (connection && typeof connection === "object" &&
+                  "state" in connection && connection.state === "ready") {
+                connectedRef.current.add(key);
+              }
+            }
+          }
         } catch {
           if (controller.signal.aborted) return;
           // Retrying on focus refreshes workspace state and skips completed work.

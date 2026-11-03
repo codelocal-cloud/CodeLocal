@@ -27,6 +27,13 @@ export default async function DesignPage() {
       <div className={styles.page}>
         <h1 className="sr-only">{t("Design")}</h1>
 
+        <div className={styles.mcpGuide} role="note">
+          <strong>{t("To edit with AI, connect an open Penpot file")}</strong>
+          <span>
+            {t("Open a design file, choose File → MCP Server → Connect, and keep that tab active. The MCP server being online does not mean the canvas is connected.")}
+          </span>
+        </div>
+
         <div className={styles.embedShell}>
           <div className={styles.embedBar}>
             <span><i aria-hidden="true" />design.codelocal.cloud</span>

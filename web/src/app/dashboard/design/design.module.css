@@ -47,6 +47,22 @@
 .status i { width: 7px; height: 7px; border-radius: 50%; background: #8f99a8; box-shadow: 0 0 0 3px rgba(143,153,168,.08); }
 .status[data-active="true"] i { background: #68c78f; box-shadow: 0 0 0 3px rgba(104,199,143,.1); }
 
+.mcpGuide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mcpGuide strong { color: var(--text-primary); }
+
 .embedShell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -83,8 +99,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #68c78f;
-  box-shadow: 0 0 0 3px rgba(104,199,143,.1);
+  background: #8f99a8;
+  box-shadow: 0 0 0 3px rgba(143,153,168,.1);
 }
 
 .embedBar a,

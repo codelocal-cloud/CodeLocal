@@ -18,6 +18,7 @@ let inFlight = 0;
 let peak = 0;
 let hold;
 let responseStatus = 200;
+let connectionState = "ready";
 let timer;
 const items = Array.from({ length: 29 }, (_, i) => ({
   deviceId: "device", workspaceId: `workspace-${i}`, status: "active", runtimeOnline: true,
@@ -37,6 +38,7 @@ runInNewContext(code, {
     try {
       if (hold) await new Promise((resolve) => { hold = resolve; });
       return { ok: responseStatus === 200, status: responseStatus,
+        json: async () => ({ connection: { state: connectionState } }),
         headers: { get: () => "600" } };
     } finally {
       inFlight--;
@@ -122,6 +124,28 @@ cleanups.forEach((cleanup) => cleanup?.());
 cleanups = render();
 await flush();
 assert.equal(calls.length, 31, "queue resumes after cooldown");
+message("test-account-token-E");
+cleanups.forEach((cleanup) => cleanup?.());
+connectionState = "configured";
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "configured-but-unusable server is retried on a future refresh");
+assert.equal(refs[2].current.size, 0, "HTTP 200 with configured state is not marked connected");
+cleanups.forEach((cleanup) => cleanup?.());
+connectionState = "error";
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "failed MCP probes remain eligible for retry");
+assert.equal(refs[2].current.size, 0, "HTTP 200 with error state is not marked connected");
+cleanups.forEach((cleanup) => cleanup?.());
+connectionState = "ready";
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "connections recover once their MCP probe succeeds");
+assert.equal(refs[2].current.size, 30, "only confirmed-ready connections are cached");
 cleanups.forEach((cleanup) => cleanup?.());
 assert.equal(timer, undefined, "unmount cancels retry");
 console.log("PASS: 29 workspaces, bounded concurrency, CSRF, origin/source checks, rotation, rate-limit resume");
