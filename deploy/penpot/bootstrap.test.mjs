@@ -17,6 +17,7 @@ assert.match(
   "Penpot plugin iframe and CodeLocal dashboard must remain the only frame ancestors",
 );
 for (const dockerfile of frontendDockerfiles) {
+  assert.match(dockerfile, /codelocal-mcp-bootstrap-20261105-c3b3cf0\.js/, "bootstrap must use a new asset filename so CDN cannot return the pre-hotfix script");
   assert.match(
     dockerfile,
     /\[ "\$\(grep -o 'hidden:d' .*plugin\.js \| wc -l\)" -eq 1 \]/,

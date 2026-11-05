@@ -6,7 +6,7 @@ FROM penpotapp/frontend:2.17.0
 USER root
 COPY nginx-security-headers.conf /etc/nginx/nginx-security-headers.conf
 COPY nginx-mcp-locations.conf.template /tmp/nginx-mcp-locations.conf.template
-COPY codelocal-mcp-bootstrap.js /var/www/app/codelocal-mcp-bootstrap.js
+COPY codelocal-mcp-bootstrap.js /var/www/app/codelocal-mcp-bootstrap-20261105-c3b3cf0.js
 
 # Penpot 2.17.0 contains the upstream ui.css fix. Keep the documented upstream
 # compatibility fallback so a rebuilt image cannot regress to an HTML 404 when
@@ -27,6 +27,6 @@ RUN if [ ! -e /var/www/app/css/ui.css ] && [ -e /var/www/app/css/main.css ]; the
     [ "$(grep -o 'shared.js?version=2.17.0-1784702688' /var/www/app/index.html | wc -l)" -eq 1 ] && \
     sed -i 's/shared.js?version=2.17.0-1784702688/shared.js?version=2.17.0-1784702688-codelocal2/' /var/www/app/index.html && \
     grep -q '</body>' /var/www/app/index.html && \
-    sed -i 's#</body>#<script src="/codelocal-mcp-bootstrap.js?v=3" defer></script></body>#' /var/www/app/index.html
+    sed -i 's#</body>#<script src="/codelocal-mcp-bootstrap-20261105-c3b3cf0.js" defer></script></body>#' /var/www/app/index.html
 
 USER penpot:penpot
