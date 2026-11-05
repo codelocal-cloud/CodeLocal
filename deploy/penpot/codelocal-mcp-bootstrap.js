@@ -23,6 +23,7 @@
 
   let provisioning = false;
   let deliveredToken = "";
+  let mcpEnabledForSession = false;
 
   async function rpc(command, body) {
     const response = await fetch(`/api/rpc/command/${command}`, {
@@ -77,7 +78,14 @@
           type: "mcp",
         }));
       }
-      if (!token || (!forceDeliver && token === deliveredToken)) return;
+      if (!token) return;
+      if (!mcpEnabledForSession) {
+        // The native Penpot plugin only starts when the account MCP flag is enabled.
+        // Creating an MCP access token alone does not set this profile flag.
+        await rpc("update-profile-props", { props: { "mcp-enabled": true } });
+        mcpEnabledForSession = true;
+      }
+      if (!forceDeliver && token === deliveredToken) return;
       deliveredToken = token;
       window.parent.postMessage({ type: MESSAGE_TYPE, token }, parentOrigin);
     } catch {

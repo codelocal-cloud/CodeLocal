@@ -17,8 +17,8 @@ assert.match(
   "Penpot plugin iframe and CodeLocal dashboard must remain the only frame ancestors",
 );
 for (const dockerfile of frontendDockerfiles) {
-  assert.match(dockerfile, /sso-referrer\.js\?v=2/, "bootstrap script must bypass CDN-cached 404 responses");
-  assert.match(dockerfile, /codelocal-mcp-bootstrap-20261105-sso-referrer\.js/, "bootstrap must use a new asset filename so CDN cannot return the pre-hotfix script");
+  assert.match(dockerfile, /auto-enable\.js\?v=2/, "bootstrap script must bypass CDN-cached 404 responses");
+  assert.match(dockerfile, /codelocal-mcp-bootstrap-20261105-auto-enable\.js/, "bootstrap must use a new asset filename so CDN cannot return the pre-hotfix script");
   assert.match(
     dockerfile,
     /\[ "\$\(grep -o 'hidden:d' .*plugin\.js \| wc -l\)" -eq 1 \]/,
@@ -51,8 +51,9 @@ assert.match(
   "credential-bearing MCP query forms must never enter access logs",
 );
 
-function boot(responses, referrer = "https://codelocal.cloud/dashboard/design") {
+function boot(responses, referrer = "https://codelocal.cloud/dashboard/design", testOptions = {}) {
   const calls = [];
+  const updates = [];
   const messages = [];
   const events = {};
   const document = { referrer, visibilityState: "visible", addEventListener: (name, fn) => { events[name] = fn; } };
@@ -67,6 +68,11 @@ function boot(responses, referrer = "https://codelocal.cloud/dashboard/design") 
   runInNewContext(source, {
     window, document, URL,
     fetch: async (path, options) => {
+      if (path === "/api/rpc/command/update-profile-props") {
+        updates.push({ path, options });
+        const fail = updates.length <= (testOptions.failUpdates || 0);
+        return { ok: !fail, json: async () => ({}) };
+      }
       calls.push({ path, options });
       const response = responses.shift();
       if (response instanceof Error) throw response;
@@ -74,7 +80,7 @@ function boot(responses, referrer = "https://codelocal.cloud/dashboard/design") 
       return { ok: response.ok !== false, json: async () => response.value };
     },
   });
-  return { calls, messages, events, document, parent };
+  return { calls, updates, messages, events, document, parent };
 }
 
 for (const response of [{ ok: false }, new Error("network"), { get value() { throw new Error("invalid JSON"); } }]) {
@@ -137,6 +143,19 @@ await flush();
 assert.equal(redirected.calls.length, 1, "trusted parent handshake recovers after OIDC redirect");
 assert.equal(redirected.messages.length, 1);
 assert.equal(redirected.messages[0].message.token, token);
+
+assert.equal(handshake.updates.length, 1, "enabling MCP should be idempotent in one session");
+assert.equal(JSON.parse(handshake.updates[0].options.body).props["mcp-enabled"], true,
+  "CodeLocal must enable the native Penpot MCP plugin, not only create a key");
+
+const failedEnable = boot([{ value: { token } }, { value: { token } }],
+  "https://codelocal.cloud/dashboard/design", { failUpdates: 1 });
+await flush();
+assert.equal(failedEnable.messages.length, 0, "do not report MCP provisioned when enablement failed");
+failedEnable.events.hashchange();
+await flush();
+assert.equal(failedEnable.updates.length, 2, "enablement failures must be retried without rotating the MCP key");
+assert.equal(failedEnable.messages.length, 1, "retry delivers the existing token after enablement succeeds");
 
 const untrusted = boot([], "https://untrusted.example/");
 await flush();
