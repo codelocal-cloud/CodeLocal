@@ -18,6 +18,10 @@ let inFlight = 0;
 let peak = 0;
 let hold;
 let responseStatus = 200;
+let responseState = "ready";
+let tokenRequests = [];
+let requestInterval;
+let iframeOnLoad;
 let timer;
 const items = Array.from({ length: 29 }, (_, i) => ({
   deviceId: "device", workspaceId: `workspace-${i}`, status: "active", runtimeOnline: true,
@@ -30,6 +34,8 @@ runInNewContext(code, {
     removeEventListener: (event) => listeners.delete(event),
     setTimeout: (fn, delay) => { timer = { fn, delay }; return 1; },
     clearTimeout: () => { timer = undefined; },
+    setInterval: (fn, delay) => { requestInterval = { fn, delay }; return 2; },
+    clearInterval: () => { requestInterval = undefined; },
   },
   fetch: async (_, options) => {
     calls.push(options);
@@ -37,7 +43,7 @@ runInNewContext(code, {
     try {
       if (hold) await new Promise((resolve) => { hold = resolve; });
       return { ok: responseStatus === 200, status: responseStatus,
-        headers: { get: () => "600" } };
+        headers: { get: () => "600" }, json: async () => ({ ok: true, connection: { state: responseState } }) };
     } finally {
       inFlight--;
     }
@@ -47,9 +53,10 @@ runInNewContext(code, {
       useRef: (initial) => refs[refIndex++] ?? (refs[refIndex - 1] = { current: initial }),
       useState: () => [0, () => {}],
       useMemo: (fn) => fn(),
+      useCallback: (fn) => fn,
       useEffect: (fn) => effects.push(fn),
     };
-    if (name === "react/jsx-runtime") return { jsx: (_, props) => props };
+    if (name === "react/jsx-runtime") return { jsx: (kind, props) => { if (kind === "iframe") iframeOnLoad = props.onLoad; return props; } };
     if (name === "@/lib/i18n/provider") return {
       useTranslations: () => ({ t: (message) => message }),
     };
@@ -70,8 +77,13 @@ function render() {
 }
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 let cleanups = render();
-const frame = {};
+const frame = { postMessage: (data, origin) => tokenRequests.push({ data, origin }) };
 refs[0].current = { contentWindow: frame };
+iframeOnLoad();
+assert.equal(tokenRequests.length, 1, "iframe load requests missing Penpot token");
+assert.equal(tokenRequests[0].origin, "https://design.codelocal.cloud");
+assert.equal(tokenRequests[0].data.type, "codelocal:penpot-mcp-token-request");
+assert.equal(requestInterval.delay, 5000);
 const message = (token, origin = "https://design.codelocal.cloud", source = frame) =>
   listeners.get("message")({ origin, source, data: { type: "codelocal:penpot-mcp-token", token } });
 message("test-account-token-A", "https://untrusted.example");
@@ -124,4 +136,39 @@ await flush();
 assert.equal(calls.length, 31, "queue resumes after cooldown");
 cleanups.forEach((cleanup) => cleanup?.());
 assert.equal(timer, undefined, "unmount cancels retry");
-console.log("PASS: 29 workspaces, bounded concurrency, CSRF, origin/source checks, rotation, rate-limit resume");
+
+cleanups = render();
+message("test-account-token-E");
+cleanups.forEach((cleanup) => cleanup?.());
+responseStatus = 502;
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "transient first-time failures attempt all workspaces");
+assert.ok(timer?.delay >= 4900 && timer?.delay <= 5000, "transient failures schedule an automatic retry");
+cleanups.forEach((cleanup) => cleanup?.());
+refs[3].current = 0;
+responseStatus = 200;
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "transient failures retry without requiring user focus");
+cleanups.forEach((cleanup) => cleanup?.());
+assert.equal(timer, undefined, "successful retry cancels further retries");
+cleanups = render();
+message("test-account-token-F");
+cleanups.forEach((cleanup) => cleanup?.());
+responseState = "configured";
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "HTTP 200 configured must not count as ready");
+assert.ok(timer, "non-ready response retries");
+cleanups.forEach((cleanup) => cleanup?.());
+refs[3].current = 0;
+responseState = "ready";
+cleanups = render();
+await flush();
+assert.equal(calls.length, 60, "non-ready connection reattempted");
+cleanups.forEach((cleanup) => cleanup?.());
+console.log("PASS: Penpot iframe handshake, 29 workspaces, origin/source, CSRF, rate-limit and retries");

@@ -54,8 +54,9 @@ function boot(responses, referrer = "https://codelocal.cloud/dashboard/design") 
   const messages = [];
   const events = {};
   const document = { referrer, visibilityState: "visible", addEventListener: (name, fn) => { events[name] = fn; } };
+  const parent = { postMessage: (message, origin) => messages.push({ message, origin }) };
   const window = {
-    parent: { postMessage: (message, origin) => messages.push({ message, origin }) },
+    parent,
     location: { origin: "https://design.codelocal.cloud" },
     addEventListener: (name, fn) => { events[name] = fn; },
     setTimeout: (fn) => { events.timeout = fn; },
@@ -71,7 +72,7 @@ function boot(responses, referrer = "https://codelocal.cloud/dashboard/design") 
       return { ok: response.ok !== false, json: async () => response.value };
     },
   });
-  return { calls, messages, events, document };
+  return { calls, messages, events, document, parent };
 }
 
 for (const response of [{ ok: false }, new Error("network"), { get value() { throw new Error("invalid JSON"); } }]) {
@@ -95,6 +96,21 @@ state.document.visibilityState = "hidden";
 state.events.interval();
 await flush();
 assert.equal(state.calls.length, 3, "hidden documents do not poll");
+
+const handshake = boot([{ value: { token } }, { value: { token } }]);
+await flush();
+handshake.events.message({ origin: "https://untrusted.example", source: handshake.parent, data: { type: "codelocal:penpot-mcp-token-request" } });
+handshake.events.message({ origin: "https://codelocal.cloud", source: {}, data: { type: "codelocal:penpot-mcp-token-request" } });
+assert.equal(handshake.messages.length, 1, "untrusted requests cannot receive a token");
+handshake.events.message({ origin: "https://codelocal.cloud", source: handshake.parent, data: { type: "codelocal:penpot-mcp-token-request" } });
+await flush();
+assert.equal(handshake.messages.length, 2, "trusted parent can recover missed token");
+assert.equal(handshake.calls.length, 2, "recovered token is revalidated against active SSO");
+const denied = boot([{ value: { token } }, { ok: false }]);
+await flush();
+denied.events.message({ origin: "https://codelocal.cloud", source: denied.parent, data: { type: "codelocal:penpot-mcp-token-request" } });
+await flush();
+assert.equal(denied.messages.length, 1, "failed SSO lookup cannot resend stale token");
 
 const fresh = boot([{ value: null }, { value: { token } }]);
 await flush();

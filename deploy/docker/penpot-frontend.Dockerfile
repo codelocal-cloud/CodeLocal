@@ -27,6 +27,6 @@ RUN if [ ! -e /var/www/app/css/ui.css ] && [ -e /var/www/app/css/main.css ]; the
     [ "$(grep -o 'shared.js?version=2.17.0-1784702688' /var/www/app/index.html | wc -l)" -eq 1 ] && \
     sed -i 's/shared.js?version=2.17.0-1784702688/shared.js?version=2.17.0-1784702688-codelocal2/' /var/www/app/index.html && \
     grep -q '</body>' /var/www/app/index.html && \
-    sed -i 's#</body>#<script src="/codelocal-mcp-bootstrap.js?v=2" defer></script></body>#' /var/www/app/index.html
+    sed -i 's#</body>#<script src="/codelocal-mcp-bootstrap.js?v=3" defer></script></body>#' /var/www/app/index.html
 
 USER penpot:penpot

@@ -2,6 +2,7 @@
   "use strict";
 
   const MESSAGE_TYPE = "codelocal:penpot-mcp-token";
+  const REQUEST_TYPE = "codelocal:penpot-mcp-token-request";
   const ALLOWED_PARENT_ORIGINS = new Set([
     "https://codelocal.cloud",
     "http://localhost:3000",
@@ -63,7 +64,7 @@
     return "";
   }
 
-  async function provision() {
+  async function provision(forceDeliver = false) {
     if (provisioning || document.visibilityState === "hidden") return;
     provisioning = true;
     try {
@@ -74,7 +75,7 @@
           type: "mcp",
         }));
       }
-      if (!token || token === deliveredToken) return;
+      if (!token || (!forceDeliver && token === deliveredToken)) return;
       deliveredToken = token;
       window.parent.postMessage({ type: MESSAGE_TYPE, token }, parentOrigin);
     } catch {
@@ -83,6 +84,12 @@
       provisioning = false;
     }
   }
+
+  window.addEventListener("message", (event) => {
+    if (event.origin !== parentOrigin || event.source !== window.parent || event.data?.type !== REQUEST_TYPE) return;
+    // Check the live Penpot session before resending a missed message.
+    void provision(true);
+  });
 
   void provision();
   window.setTimeout(() => void provision(), 2500);

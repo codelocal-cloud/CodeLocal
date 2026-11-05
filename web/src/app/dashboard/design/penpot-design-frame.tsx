@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAccountResource } from "@/lib/contracts/account";
 import { isWorkspacesResource } from "@/lib/contracts/resources";
 import { useDashboardResource } from "../use-dashboard-resource";
@@ -8,6 +8,7 @@ import styles from "./design.module.css";
 import { useTranslations } from "@/lib/i18n/provider";
 
 const PENPOT_TOKEN_MESSAGE = "codelocal:penpot-mcp-token";
+const PENPOT_TOKEN_REQUEST = "codelocal:penpot-mcp-token-request";
 
 type PenpotTokenMessage = {
   type: typeof PENPOT_TOKEN_MESSAGE;
@@ -30,6 +31,7 @@ export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
   const tokenRef = useRef("");
   const connectedRef = useRef(new Set<string>());
   const retryAtRef = useRef(0);
+  const retryDelayRef = useRef(5000);
   const [tokenRevision, setTokenRevision] = useState(0);
   const account = useDashboardResource("/api/v1/account", isAccountResource);
   const workspaces = useDashboardResource("/api/v1/workspaces", isWorkspacesResource);
@@ -40,6 +42,11 @@ export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
       return "";
     }
   }, [designUrl]);
+
+  const requestPenpotToken = useCallback(() => {
+    if (!designOrigin || tokenRef.current) return;
+    frameRef.current?.contentWindow?.postMessage({ type: PENPOT_TOKEN_REQUEST }, designOrigin);
+  }, [designOrigin]);
 
   useEffect(() => {
     window.addEventListener("focus", workspaces.retry);
@@ -55,12 +62,25 @@ export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
       if (token === tokenRef.current) return;
       tokenRef.current = token;
       connectedRef.current.clear();
+      retryAtRef.current = 0;
+      retryDelayRef.current = 5000;
       setTokenRevision((value) => value + 1);
     }
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [designOrigin]);
+
+  useEffect(() => {
+    // If the first message arrived before React mounted, ask the iframe to resend.
+    const onFocus = () => requestPenpotToken();
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(onFocus, 5000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+  }, [requestPenpotToken]);
 
   useEffect(() => {
     const token = tokenRef.current;
@@ -82,6 +102,7 @@ export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
         retryLater();
         return;
       }
+      let failed = false;
       // Bound concurrency, not coverage: later workspaces need credentials too.
       for (const workspace of targets) {
         if (controller.signal.aborted || token !== tokenRef.current) return;
@@ -117,11 +138,31 @@ export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
             retryLater();
             return;
           }
-          if (response.ok) connectedRef.current.add(key);
+          if (response.ok) {
+            // An HTTP 200 may mean "configured" even when MCP discovery failed.
+            // Only a verified ready connection may skip future retries.
+            const body = await response.json().catch(() => null);
+            if (controller.signal.aborted || token !== tokenRef.current) return;
+            if (body?.ok === true && body?.connection?.state === "ready") {
+              connectedRef.current.add(key);
+            } else {
+              failed = true;
+            }
+          } else {
+            failed = true;
+          }
         } catch {
           if (controller.signal.aborted) return;
-          // Retrying on focus refreshes workspace state and skips completed work.
+          failed = true;
         }
+      }
+      if (failed && !controller.signal.aborted && token === tokenRef.current) {
+        // Runtime settings may still be syncing when a user connects for the first time.
+        retryAtRef.current = Date.now() + retryDelayRef.current;
+        retryDelayRef.current = Math.min(retryDelayRef.current * 2, 60_000);
+        retryLater();
+      } else if (!failed) {
+        retryDelayRef.current = 5000;
       }
     }
     void connectWorkspaces();
@@ -135,6 +176,7 @@ export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
   return (
     <iframe
       ref={frameRef}
+      onLoad={requestPenpotToken}
       allow="clipboard-read; clipboard-write"
       className={styles.designFrame}
       referrerPolicy="strict-origin-when-cross-origin"
