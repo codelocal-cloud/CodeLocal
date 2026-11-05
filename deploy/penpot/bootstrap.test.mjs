@@ -17,6 +17,7 @@ assert.match(
   "Penpot plugin iframe and CodeLocal dashboard must remain the only frame ancestors",
 );
 for (const dockerfile of frontendDockerfiles) {
+  assert.match(dockerfile, /sso-referrer\.js\?v=2/, "bootstrap script must bypass CDN-cached 404 responses");
   assert.match(dockerfile, /codelocal-mcp-bootstrap-20261105-sso-referrer\.js/, "bootstrap must use a new asset filename so CDN cannot return the pre-hotfix script");
   assert.match(
     dockerfile,
