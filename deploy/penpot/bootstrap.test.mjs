@@ -17,7 +17,7 @@ assert.match(
   "Penpot plugin iframe and CodeLocal dashboard must remain the only frame ancestors",
 );
 for (const dockerfile of frontendDockerfiles) {
-  assert.match(dockerfile, /codelocal-mcp-bootstrap-20261105-c3b3cf0\.js/, "bootstrap must use a new asset filename so CDN cannot return the pre-hotfix script");
+  assert.match(dockerfile, /codelocal-mcp-bootstrap-20261105-sso-referrer\.js/, "bootstrap must use a new asset filename so CDN cannot return the pre-hotfix script");
   assert.match(
     dockerfile,
     /\[ "\$\(grep -o 'hidden:d' .*plugin\.js \| wc -l\)" -eq 1 \]/,
@@ -119,6 +119,23 @@ assert.equal(fresh.calls.length, 2);
 assert.equal(fresh.calls[1].path, "/api/rpc/command/create-access-token");
 assert.equal(JSON.parse(fresh.calls[1].options.body).type, "mcp");
 assert.equal(fresh.messages.length, 1);
+
+// OIDC and in-frame redirects may erase the parent referrer. A trusted
+// parent handshake must still provision without accepting a spoofed origin.
+const redirected = boot([{ value: { token } }], "");
+await flush();
+assert.equal(redirected.calls.length, 0, "unknown parent must not trigger a token lookup");
+redirected.events.message({ origin: "https://untrusted.example", source: redirected.parent, data: { type: "codelocal:penpot-mcp-token-request" } });
+await flush();
+assert.equal(redirected.calls.length, 0, "untrusted origin cannot trigger token lookup");
+redirected.events.message({ origin: "https://codelocal.cloud", source: {}, data: { type: "codelocal:penpot-mcp-token-request" } });
+await flush();
+assert.equal(redirected.calls.length, 0, "untrusted window cannot trigger token lookup");
+redirected.events.message({ origin: "https://codelocal.cloud", source: redirected.parent, data: { type: "codelocal:penpot-mcp-token-request" } });
+await flush();
+assert.equal(redirected.calls.length, 1, "trusted parent handshake recovers after OIDC redirect");
+assert.equal(redirected.messages.length, 1);
+assert.equal(redirected.messages[0].message.token, token);
 
 const untrusted = boot([], "https://untrusted.example/");
 await flush();

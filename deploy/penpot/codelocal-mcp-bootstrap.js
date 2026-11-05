@@ -11,13 +11,15 @@
 
   if (window.parent === window) return;
 
+  // OIDC redirects can strip or replace document.referrer inside the iframe.
+  // Accept only a verified parent-window handshake from an allowed origin.
   let parentOrigin = "";
   try {
-    parentOrigin = new URL(document.referrer).origin;
+    const referrerOrigin = new URL(document.referrer).origin;
+    if (ALLOWED_PARENT_ORIGINS.has(referrerOrigin)) parentOrigin = referrerOrigin;
   } catch {
-    return;
+    // The trusted parent may still establish its origin via postMessage.
   }
-  if (!ALLOWED_PARENT_ORIGINS.has(parentOrigin)) return;
 
   let provisioning = false;
   let deliveredToken = "";
@@ -65,7 +67,7 @@
   }
 
   async function provision(forceDeliver = false) {
-    if (provisioning || document.visibilityState === "hidden") return;
+    if (!parentOrigin || provisioning || document.visibilityState === "hidden") return;
     provisioning = true;
     try {
       let token = extractToken(await rpc("get-current-mcp-token", {}));
@@ -86,8 +88,10 @@
   }
 
   window.addEventListener("message", (event) => {
-    if (event.origin !== parentOrigin || event.source !== window.parent || event.data?.type !== REQUEST_TYPE) return;
-    // Check the live Penpot session before resending a missed message.
+    if (event.source !== window.parent || event.data?.type !== REQUEST_TYPE ||
+        !ALLOWED_PARENT_ORIGINS.has(event.origin)) return;
+    parentOrigin = event.origin;
+    // Recheck the live session after the trusted parent completes its handshake.
     void provision(true);
   });
 
