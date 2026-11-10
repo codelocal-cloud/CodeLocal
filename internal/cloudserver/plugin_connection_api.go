@@ -257,6 +257,12 @@ func (s *Server) pluginConnectAPI(w http.ResponseWriter, r *http.Request) {
 		webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_plugin_connection", "detail": "Invalid Plugin connection settings."})
 		return
 	}
+	// The built-in Plane Cloud integration is OAuth-only. Self-hosted and PAT
+	// connections use the separately authorized local MCP Hub instead.
+	if pluginID == "plane" {
+		webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "plane_oauth_required"})
+		return
+	}
 	if pluginID == "penpot" {
 		if strings.TrimSpace(input.BearerEnv) != "" {
 			webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_plugin_connection", "detail": "Penpot MCP keys must be stored encrypted by CodeLocal."})
@@ -555,6 +561,9 @@ func (s *Server) pluginCloudConnect(w http.ResponseWriter, r *http.Request, iden
 
 func (s *Server) pluginCloudConfig(ctx context.Context, user, plugin, endpoint string, credential cloud.PluginCloudCredential, probe bool) (cloudmcp.Config, error) {
 	cfg := cloudmcp.Config{Endpoint: endpoint, Bearer: credential.Token}
+	if plugin == "plane" && (endpoint != plugindomain.PlaneHostedMCPOAuthURL || credential.Kind != "oauth") {
+		return cfg, errors.New("Plane requires the official OAuth MCP connection")
+	}
 	if credential.Endpoint != endpoint {
 		return cfg, errors.New("plugin endpoint changed; reconnect required")
 	}

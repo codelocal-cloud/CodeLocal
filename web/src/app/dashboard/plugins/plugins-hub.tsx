@@ -81,6 +81,8 @@ function responseError(response: Response) {
         case "reauthentication_required": return "Sign in again before changing Plugin access.";
         case "plugin_not_found": return "This Plugin is no longer available.";
         case "plugin_not_installed": return "Install this Plugin before configuring a connection.";
+        case "plane_oauth_required": return "Plane Cloud requires OAuth. For self-hosted Plane, use the local MCP Hub.";
+        case "invalid_plane_endpoint": return "Use the official Plane OAuth MCP endpoint for this plugin.";
         case "plugin_install_failed": return "CodeLocal could not save the Plugin installation.";
         case "plugin_uninstall_failed": return "CodeLocal could not remove the Plugin installation.";
         case "plugin_disconnect_required": return "Disconnect this Plugin from every device before removing it.";

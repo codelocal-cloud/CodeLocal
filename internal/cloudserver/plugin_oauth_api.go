@@ -38,6 +38,10 @@ func (s *Server) pluginOAuthStart(w http.ResponseWriter, r *http.Request) {
 		webutil.JSON(w, 400, map[string]string{"error": "invalid_endpoint"})
 		return
 	}
+	if plugin == "plane" && input.Endpoint != plugins.PlaneHostedMCPOAuthURL {
+		webutil.JSON(w, 400, map[string]string{"error": "invalid_plane_endpoint"})
+		return
+	}
 	base := strings.TrimRight(s.WebAuth.PublicBaseURL, "/")
 	if !strings.HasPrefix(base, "https://") {
 		webutil.JSON(w, 503, map[string]string{"error": "oauth_requires_public_https"})
@@ -79,6 +83,10 @@ func (s *Server) pluginOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	if q.Get("error") != "" {
 		http.Error(w, "Authorization was not completed. Return to Plugins.", 400)
+		return
+	}
+	if plugin == "plane" && flow.Endpoint != plugins.PlaneHostedMCPOAuthURL {
+		http.Error(w, "Plane OAuth endpoint mismatch. Return to Plugins and reconnect.", 400)
 		return
 	}
 	client, closeClient := cloudmcp.NewMetadataClient()

@@ -7,6 +7,10 @@ import (
 
 const ManagedPenpotMCPURL = "https://design.codelocal.cloud/mcp/stream"
 
+// PlaneHostedMCPOAuthURL is Plane's official hosted Streamable HTTP OAuth endpoint.
+// Self-hosted Plane Community Edition uses the local stdio MCP server instead.
+const PlaneHostedMCPOAuthURL = "https://mcp.plane.so/http/mcp"
+
 type CatalogEntry struct {
 	Manifest         Manifest        `json:"manifest"`
 	Featured         bool            `json:"featured,omitempty"`
@@ -17,6 +21,7 @@ type CatalogEntry struct {
 func BuiltinCatalog() []CatalogEntry {
 	return []CatalogEntry{
 		builtinPenpotCatalogEntry(),
+		builtinPlaneCatalogEntry(),
 	}
 }
 
@@ -47,6 +52,41 @@ func builtinPenpotCatalogEntry() CatalogEntry {
 						{Key: "endpoint", Label: "Hosted Penpot MCP endpoint", Required: true, Description: ManagedPenpotMCPURL},
 						{Key: "userToken", Label: "Penpot MCP key", Required: true, Secret: true, Description: "Generate this key in Penpot under Account → Integrations → MCP Server."},
 					},
+				},
+			}},
+		},
+	}
+}
+
+// builtinPlaneCatalogEntry adds an opt-in Plane Cloud MCP integration.
+// Authentication uses CodeLocal's existing per-user OAuth and approval flow.
+func builtinPlaneCatalogEntry() CatalogEntry {
+	return CatalogEntry{
+		Featured: true,
+		Manifest: Manifest{
+			SchemaVersion: SchemaVersion,
+			ID:            "plane",
+			Name:          "Plane Project Management",
+			Version:       "0.1.0",
+			Publisher:     Publisher{ID: "codelocal", Name: "CodeLocal", Verified: true},
+			Description:   "Manage Plane projects, work items, cycles, and modules with the official Plane MCP server. Requires a Plane account.",
+			Categories:    []string{"Project Management", "Productivity", "Developer Tools"},
+			Scope:         ScopeSystem,
+			Distribution:  DistributionInternal,
+			Components: []Component{{
+				Kind: ComponentAppTemplate,
+				ID:   "plane-mcp",
+				AppTemplate: &AppTemplateDefinition{
+					Transport:    TransportMCPHTTP,
+					Auth:         AuthDefinition{Kind: AuthOAuth2},
+					Capabilities: []Capability{CapabilityExternalRead, CapabilityExternalWrite, CapabilityExternalDelete, CapabilityNetwork},
+					Execution:    []ExecutionTarget{ExecutionCloud},
+					Fields: []AppTemplateField{{
+						Key:         "endpoint",
+						Label:       "Official Plane OAuth MCP endpoint",
+						Required:    true,
+						Description: PlaneHostedMCPOAuthURL,
+					}},
 				},
 			}},
 		},

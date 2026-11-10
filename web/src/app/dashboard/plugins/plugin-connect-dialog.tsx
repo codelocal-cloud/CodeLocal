@@ -61,6 +61,7 @@ type ConnectionInput = {
 };
 
 const hostedPenpotMcpEndpoint = "https://design.codelocal.cloud/mcp/stream";
+const hostedPlaneMcpEndpoint = "https://mcp.plane.so/http/mcp";
 
 const permissionLabels: Record<string, string> = {
   external_read: "Read external data",
@@ -130,6 +131,7 @@ export function PluginConnectDialog({
     .filter((workspace) => workspace.runtimeOnline)
     .filter((workspace, index, items) => items.findIndex((item) => item.deviceId === workspace.deviceId) === index);
   const isPenpot = plugin.id === "penpot";
+  const isPlane = plugin.id === "plane";
   const supportsCloud = (plugin.executionTargets ?? []).includes("cloud");
   const supportsDevice = (plugin.executionTargets ?? []).some((target) => target === "local") || (plugin.executionTargets ?? []).length === 0;
   const existing = connections[0];
@@ -137,11 +139,11 @@ export function PluginConnectDialog({
     if (existing?.executionTarget === "cloud") return "cloud";
     return supportsCloud ? "cloud" : "device";
   });
-  const [authKind, setAuthKind] = useState<"none" | "bearer" | "oauth">("bearer");
+  const [authKind, setAuthKind] = useState<"none" | "bearer" | "oauth">(isPlane ? "oauth" : "bearer");
   const [feedback, setFeedback] = useState("");
   const [connectionAcknowledged, setConnectionAcknowledged] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] = useState("");
-  const [endpoint, setEndpoint] = useState(() => existing?.endpoint ?? (isPenpot ? hostedPenpotMcpEndpoint : ""));
+  const [endpoint, setEndpoint] = useState(() => existing?.endpoint ?? (isPenpot ? hostedPenpotMcpEndpoint : isPlane ? hostedPlaneMcpEndpoint : ""));
   const [bearerToken, setBearerToken] = useState("");
   const [bearerEnv, setBearerEnv] = useState(() => existing?.credentialRef?.startsWith("CODELOCAL_PLUGIN_") ? "" : existing?.credentialRef ?? "");
 
@@ -309,12 +311,12 @@ export function PluginConnectDialog({
                 inputMode="url"
                 onChange={(event) => setEndpoint(event.target.value)}
                 placeholder="https://example.com/mcp"
-                readOnly={isPenpot}
+                readOnly={isPenpot || isPlane}
                 type="url"
                 value={endpoint}
               />
             </label>
-            {!isPenpot && <label className={styles.field}>
+            {!isPenpot && !isPlane && <label className={styles.field}>
               <span>{t("Authentication")}</span>
               <select value={authKind} onChange={(event) => { setAuthKind(event.target.value as typeof authKind); setBearerToken(""); }}>
                 <option value="bearer">{t("Bearer token")}</option>
@@ -341,6 +343,7 @@ export function PluginConnectDialog({
                 : "Tool calls require your approval in chat. Cloud credentials stay on CodeLocal.")}
             </p>
             {isPenpot && <p className={styles.configWarning}>{t("Penpot editing requires an active editor bridge. A hosted MCP endpoint alone does not prove background editing works.")}</p>}
+            {isPlane && <p className={styles.configWarning}>{t("Sign in to Plane and authorize a workspace. CodeLocal OAuth callback may need to be allowlisted by the Plane MCP server. For self-hosted Plane Community Edition, use the local CodeLocal MCP Hub instead.")}</p>}
           </div>
         ) : (
           <div className={styles.configPanel}>
@@ -370,7 +373,7 @@ export function PluginConnectDialog({
                 inputMode="url"
                 onChange={(event) => setEndpoint(event.target.value)}
                 placeholder="https://example.com/mcp"
-                readOnly={isPenpot}
+                readOnly={isPenpot || isPlane}
                 type="url"
                 value={endpoint}
               />

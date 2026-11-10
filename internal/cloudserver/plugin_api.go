@@ -80,10 +80,7 @@ func pluginCatalogResponse(installations []cloud.PluginInstallation, connections
 			ConnectedCount: readyConnections,
 			System:         entry.DefaultInstalled,
 		}
-		item.ExecutionTargets = []string{"local"}
-		if manifestSupportsCloud(entry) {
-			item.ExecutionTargets = append(item.ExecutionTargets, "cloud")
-		}
+		item.ExecutionTargets = pluginCatalogExecutionTargets(manifest)
 		if entry.Runtime != nil {
 			item.ServerName = entry.Runtime.ServerName
 		}
@@ -103,6 +100,31 @@ func pluginCatalogResponse(installations []cloud.PluginInstallation, connections
 		response.Items = append(response.Items, item)
 	}
 	return response, nil
+}
+
+// pluginCatalogExecutionTargets exposes only the transports declared by a
+// plugin manifest. The UI must not invent local execution for Cloud-only apps.
+func pluginCatalogExecutionTargets(manifest plugindomain.Manifest) []string {
+	declared := make(map[plugindomain.ExecutionTarget]bool)
+	for _, component := range manifest.Components {
+		if component.App != nil {
+			for _, target := range component.App.Execution {
+				declared[target] = true
+			}
+		}
+		if component.AppTemplate != nil {
+			for _, target := range component.AppTemplate.Execution {
+				declared[target] = true
+			}
+		}
+	}
+	result := []string{}
+	for _, target := range []plugindomain.ExecutionTarget{plugindomain.ExecutionLocal, plugindomain.ExecutionCloud} {
+		if declared[target] {
+			result = append(result, string(target))
+		}
+	}
+	return result
 }
 
 func manifestNeedsSetup(manifest plugindomain.Manifest) bool {
