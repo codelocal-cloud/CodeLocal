@@ -121,7 +121,11 @@ const landingStyle = "./page.module.css";
 assert.ok(declarations(landingStyle, ".hero h1", "white-space").includes("nowrap"), "Hero brand name must stay on one line");
 assert.ok(declarations(landingStyle, ".hero h1", "overflow-wrap").includes("normal"), "Hero must override inherited anywhere wrapping");
 assert.ok(declarations(landingStyle, ".hero h1", "font-size").some((size) => size.includes("clamp(64px,6vw,104px)")), "Hero title must scale within its desktop column");
-assert.ok(declarations(landingStyle, ".heroImage", "mix-blend-mode").includes("screen"), "Hero illustration must blend without a black rectangle");
+assert.ok(declarations(landingStyle, ".heroImage", "mix-blend-mode").includes("screen"), "Hero illustration must blend into the landing background");
+assert.match(landing, /<div className=\{styles\.heroVisual\} aria-hidden="true">/, "Hero illustration needs its own decorative grid cell");
+assert.ok(declarations(landingStyle, ".heroVisual", "max-width").includes("680px"), "Hero art must stay smaller than the desktop viewport");
+assert.ok(declarations(landingStyle, ".heroVisual", "mask-image").some((value) => value.includes("radial-gradient")), "Hero image edges must fade smoothly into the background");
+assert.ok(!declarations(landingStyle, ".heroImage", "transform").length, "Hero illustration must not be translated outside its grid cell");
 // Keep live workspace/device/graph/forum actions while polishing their surfaces.
 const workspaces = read("./dashboard/workspaces/workspaces-live.tsx");
 const devices = read("./dashboard/devices/devices-live.tsx");

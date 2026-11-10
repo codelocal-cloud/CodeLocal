@@ -37,13 +37,17 @@
 .page a>svg {flex-shrink:0;}
 .hero {
   position:relative;isolation:isolate;min-height:min(720px,calc(100svh - 88px));display:grid;
-  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(24px,3.4vw,50px);
   align-items:center;max-width:1500px;margin:0 auto;padding:44px max(44px,calc((100% - 1280px)/2)) 90px;
   background:radial-gradient(ellipse at 83% 35%,rgba(106,204,170,.11),transparent 37%),linear-gradient(150deg,#0c1110 0%,#0b0d0e 60%);
   overflow:hidden;
 }
 .hero:before {content:"";position:absolute;inset:0;background:linear-gradient(transparent 95%,rgba(182,243,211,.018) 95%),linear-gradient(90deg,transparent 95%,rgba(182,243,211,.015) 95%);background-size:54px 54px;mask-image:linear-gradient(90deg,transparent 15%,#000 100%);pointer-events:none;z-index:-1;}
-.heroImage {z-index:-1;object-fit:contain!important;object-position:83% center!important;transform:translateX(15%) scale(.83);opacity:.88;mix-blend-mode:screen;filter:drop-shadow(0 24px 72px rgba(72,187,134,.12));}
+.heroVisual {
+  position:relative;justify-self:end;align-self:center;width:100%;max-width:680px;aspect-ratio:3 / 2;
+  overflow:hidden;mask-image:radial-gradient(ellipse 66% 75% at 50% 51%,#000 48%,transparent 80%);
+}
+.heroImage {object-fit:cover!important;object-position:center!important;opacity:.9;mix-blend-mode:screen;}
 .heroCopy {position:relative;z-index:1;max-width:640px;min-width:0;text-align:left;padding:20px 0;}
 .eyebrow {display:inline-flex;align-items:center;gap:8px;color:var(--brand-accent);font-size:12px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;line-height:1.6;}
 .hero .eyebrow {padding:8px 13px;border:1px solid rgba(182,243,211,.2);border-radius:100px;background:rgba(182,243,211,.065);}
@@ -127,10 +131,11 @@
   .navLinks {order:3;width:100%;justify-content:space-between;gap:12px;border-top:1px solid var(--landing-line);padding-top:7px;}
   .brand {font-size:21px;}
   .navButton {min-height:44px;padding-inline:12px;}
-  .hero {grid-template-columns:minmax(0,1fr);min-height:690px;padding:38px 28px 100px;align-items:start;}
+  .hero {grid-template-columns:minmax(0,1fr);min-height:690px;padding:38px 28px 100px;align-items:start;gap:12px;}
   .heroCopy {width:min(100%,640px);padding:0;}
   .hero h1 {font-size:clamp(60px,11vw,95px);}
-  .heroImage {object-position:center bottom!important;transform:translateY(29%) scale(.84);opacity:.66;}
+  .heroVisual {justify-self:center;width:min(100%,570px);margin-top:8px;}
+  .heroImage {opacity:.8;}
   .principleGrid {grid-template-columns:1fr;gap:12px;}
   .principleGrid article {min-height:0;}
   .productLayout {grid-template-columns:1fr;}
@@ -151,7 +156,8 @@
   .hero h1 {font-size:clamp(51px,12vw,72px);margin-top:17px;}
   .hero h2 {font-size:clamp(22px,6vw,29px);}
   .hero p {font-size:15px;}
-  .heroImage {transform:translateY(27%) scale(.95);opacity:.59;}
+  .heroVisual {width:min(100%,430px);margin-top:4px;}
+  .heroImage {opacity:.74;}
   .heroFoot {bottom:15px;font-size:11px;}
   .heroFoot>span:last-child {display:none;}
   .clients {align-items:flex-start;flex-direction:column;padding-block:21px;gap:14px;}

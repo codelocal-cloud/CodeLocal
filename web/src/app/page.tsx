@@ -51,7 +51,6 @@ export default async function Home() {
       </header>
 
       <section className={styles.hero} id="main-content">
-        <Image className={styles.heroImage} src="/codelocal-sculpture.webp" alt="" fill sizes="100vw" preload />
         <div className={styles.heroCopy}>
           <span className={styles.eyebrow}>{t("Project intelligence. Local control.")}</span>
           <h1>CodeLocal</h1>
@@ -61,6 +60,9 @@ export default async function Home() {
             <Link className={styles.primaryButton} href="/dashboard">{t("Explore CodeLocal")} <AppIcon name="external" size={17} /></Link>
             <a className={styles.secondaryButton} href="#system">{t("See how it works")} <AppIcon name="chevron-down" size={17} /></a>
           </div>
+        </div>
+        <div className={styles.heroVisual} aria-hidden="true">
+          <Image className={styles.heroImage} src="/codelocal-sculpture.webp" alt="" fill sizes="(max-width: 820px) 90vw, (max-width: 1500px) 50vw, 680px" preload />
         </div>
         <div className={styles.heroFoot}>
           <span><AppIcon name="shield" size={15} /> {t("Your workspace. Your permission.")}</span>
