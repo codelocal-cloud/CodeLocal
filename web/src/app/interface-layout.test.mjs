@@ -117,6 +117,11 @@ const landing = read("./page.tsx");
 assert.match(landing, /src="\/codelocal-icon.png"/);
 assert.match(landing, /href="\/dashboard"/);
 assert.match(landing, /href="\/security"/);
+const landingStyle = "./page.module.css";
+assert.ok(declarations(landingStyle, ".hero h1", "white-space").includes("nowrap"), "Hero brand name must stay on one line");
+assert.ok(declarations(landingStyle, ".hero h1", "overflow-wrap").includes("normal"), "Hero must override inherited anywhere wrapping");
+assert.ok(declarations(landingStyle, ".hero h1", "font-size").some((size) => size.includes("clamp(64px,6vw,104px)")), "Hero title must scale within its desktop column");
+assert.ok(declarations(landingStyle, ".heroImage", "mix-blend-mode").includes("screen"), "Hero illustration must blend without a black rectangle");
 // Keep live workspace/device/graph/forum actions while polishing their surfaces.
 const workspaces = read("./dashboard/workspaces/workspaces-live.tsx");
 const devices = read("./dashboard/devices/devices-live.tsx");
