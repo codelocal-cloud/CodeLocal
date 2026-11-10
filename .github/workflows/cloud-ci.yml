@@ -2,12 +2,14 @@ name: CodeLocal Cloud CI
 
 on:
   push:
-    branches: [main, dev, go-migration]
+    branches: [main, staging, dev, go-migration]
     paths:
       - 'cmd/codelocal-cloud/**'
       - 'internal/clientupdate/**'
       - 'internal/cloud/**'
+      - 'internal/cloudmcp/**'
       - 'internal/cloudserver/**'
+      - 'internal/plugins/**'
       - 'internal/deviceauth/**'
       - 'internal/gateway/**'
       - 'internal/learnedskills/**'
@@ -41,7 +43,9 @@ on:
       - 'cmd/codelocal-cloud/**'
       - 'internal/clientupdate/**'
       - 'internal/cloud/**'
+      - 'internal/cloudmcp/**'
       - 'internal/cloudserver/**'
+      - 'internal/plugins/**'
       - 'internal/deviceauth/**'
       - 'internal/gateway/**'
       - 'internal/learnedskills/**'
@@ -82,9 +86,9 @@ jobs:
           go-version: '1.25.x'
           cache: true
       - name: Test cloud packages
-        run: go test ./cmd/codelocal-cloud ./internal/cloud/... ./internal/cloudserver/... ./internal/mcpgateway/...
+        run: go test ./cmd/codelocal-cloud ./internal/cloud/... ./internal/cloudmcp/... ./internal/cloudserver/... ./internal/plugins/... ./internal/mcpgateway/...
       - name: Vet cloud packages
-        run: go vet ./cmd/codelocal-cloud ./internal/cloud/... ./internal/cloudserver/... ./internal/mcpgateway/...
+        run: go vet ./cmd/codelocal-cloud ./internal/cloud/... ./internal/cloudmcp/... ./internal/cloudserver/... ./internal/plugins/... ./internal/mcpgateway/...
       - name: Build cloud command
         run: go build ./cmd/codelocal-cloud
 

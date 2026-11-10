@@ -2,7 +2,7 @@ name: CodeLocal Web CI
 
 on:
   push:
-    branches: [main, dev, go-migration]
+    branches: [main, staging, dev, go-migration]
     paths:
       - 'web/**'
       - 'deploy/docker/web.Dockerfile'
