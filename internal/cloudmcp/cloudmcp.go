@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -27,13 +28,15 @@ type ToolSummary struct {
 	ReadOnly     bool            `json:"readOnlyHint"`
 }
 
-type Config struct{ Endpoint, Bearer string }
+type Config struct{ Endpoint, Bearer, WorkspaceSlug string }
+
+var planeWorkspaceSlugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 type Manager struct {
 	mu     sync.Mutex
 	active map[string]int
 	total  int
-	client func(string, string) (*http.Client, func())
+	client func(string, string, string) (*http.Client, func())
 }
 
 func NewManager() *Manager { return &Manager{active: map[string]int{}, client: newHTTPClient} }
@@ -72,7 +75,17 @@ func (m *Manager) open(ctx context.Context, user string, cfg Config) (*mcp.Clien
 	if err != nil {
 		return nil, nil, err
 	}
-	httpClient, closeHTTP := m.client(endpoint, cfg.Bearer)
+	if cfg.WorkspaceSlug != "" {
+		if endpoint != "https://mcp.plane.so/http/api-key/mcp" {
+			release()
+			return nil, nil, errors.New("workspace header is only supported for Plane's official PAT MCP endpoint")
+		}
+		if !planeWorkspaceSlugRE.MatchString(cfg.WorkspaceSlug) {
+			release()
+			return nil, nil, errors.New("invalid Plane workspace slug")
+		}
+	}
+	httpClient, closeHTTP := m.client(endpoint, cfg.Bearer, cfg.WorkspaceSlug)
 	client := mcp.NewClient(&mcp.Implementation{Name: "codelocal-cloud", Version: "2.0.0"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint: endpoint, HTTPClient: httpClient, MaxRetries: -1, DisableStandaloneSSE: true,

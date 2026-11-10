@@ -20,6 +20,7 @@ import (
 )
 
 var pluginCredentialRefRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var planeWorkspaceSlugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 // Cloud plugin connections do not belong to a device. The store requires a
 // non-empty device/workspace identity, so cloud rows use these sentinels; the
@@ -50,6 +51,7 @@ type pluginConnectInput struct {
 	Endpoint        string `json:"endpoint"`
 	BearerEnv       string `json:"bearerEnv,omitempty"`
 	BearerToken     string `json:"bearerToken,omitempty"`
+	WorkspaceSlug   string `json:"workspaceSlug,omitempty"`
 	ExecutionTarget string `json:"executionTarget,omitempty"`
 	AuthKind        string `json:"authKind,omitempty"`
 }
@@ -104,6 +106,9 @@ func validatePluginConnectionInput(input pluginConnectInput) (pluginConnectInput
 	input.Endpoint = strings.TrimSpace(input.Endpoint)
 	input.BearerEnv = strings.TrimSpace(input.BearerEnv)
 	input.BearerToken = strings.TrimSpace(input.BearerToken)
+	if input.WorkspaceSlug != "" {
+		return input, errors.New("workspace slug is supported only for Plane Cloud")
+	}
 	if input.DeviceID == cloudConnectionDeviceID {
 		return input, errors.New("reserved device identity")
 	}
@@ -147,6 +152,7 @@ func validatePluginCloudConnectionInput(input pluginConnectInput) (pluginConnect
 		return input, err
 	}
 	input.Endpoint = endpoint
+	input.WorkspaceSlug = strings.TrimSpace(input.WorkspaceSlug)
 	input.ExecutionTarget = "cloud"
 	if input.AuthKind == "" {
 		input.AuthKind = "bearer"
@@ -257,10 +263,19 @@ func (s *Server) pluginConnectAPI(w http.ResponseWriter, r *http.Request) {
 		webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_plugin_connection", "detail": "Invalid Plugin connection settings."})
 		return
 	}
-	// The built-in Plane Cloud integration is OAuth-only. Self-hosted and PAT
-	// connections use the separately authorized local MCP Hub instead.
+	// Plane's hosted integration uses a per-user encrypted PAT and workspace
+	// slug, never a shared CodeLocal token or an OAuth redirect exception.
 	if pluginID == "plane" {
-		webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "plane_oauth_required"})
+		if input.ExecutionTarget != "cloud" || input.Endpoint != plugindomain.PlaneHostedMCPPATURL || input.AuthKind != "bearer" || input.BearerEnv != "" {
+			webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_plane_connection"})
+			return
+		}
+		if input.WorkspaceSlug != "" && !planeWorkspaceSlugRE.MatchString(input.WorkspaceSlug) {
+			webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_plane_workspace"})
+			return
+		}
+	} else if input.WorkspaceSlug != "" {
+		webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_plugin_connection", "detail": "Workspace slug is only supported for Plane."})
 		return
 	}
 	if pluginID == "penpot" {
@@ -515,7 +530,7 @@ func (s *Server) pluginCloudConnect(w http.ResponseWriter, r *http.Request, iden
 		webutil.JSON(w, 400, map[string]string{"error": "invalid_plugin_connection", "detail": err.Error()})
 		return
 	}
-	credential := cloud.PluginCloudCredential{Kind: input.AuthKind, Token: input.BearerToken, Endpoint: input.Endpoint}
+	credential := cloud.PluginCloudCredential{Kind: input.AuthKind, Token: input.BearerToken, Endpoint: input.Endpoint, WorkspaceSlug: input.WorkspaceSlug}
 	if credential.Kind == "bearer" && credential.Token == "" {
 		existing, exists, loadErr := s.Store.PluginConnectionByDevice(r.Context(), identity.User.ID, pluginID, cloudConnectionDeviceID)
 		if loadErr != nil || !exists || existing.Endpoint != input.Endpoint {
@@ -527,6 +542,13 @@ func (s *Server) pluginCloudConnect(w http.ResponseWriter, r *http.Request, iden
 			webutil.JSON(w, 400, map[string]string{"error": "plugin_reconnect_required"})
 			return
 		}
+		if input.WorkspaceSlug != "" {
+			credential.WorkspaceSlug = input.WorkspaceSlug
+		}
+	}
+	if pluginID == "plane" && credential.WorkspaceSlug == "" {
+		webutil.JSON(w, 400, map[string]string{"error": "plane_workspace_required"})
+		return
 	}
 	cfg, err := s.pluginCloudConfig(r.Context(), identity.User.ID, pluginID, input.Endpoint, credential, true)
 	if err != nil {
@@ -561,8 +583,14 @@ func (s *Server) pluginCloudConnect(w http.ResponseWriter, r *http.Request, iden
 
 func (s *Server) pluginCloudConfig(ctx context.Context, user, plugin, endpoint string, credential cloud.PluginCloudCredential, probe bool) (cloudmcp.Config, error) {
 	cfg := cloudmcp.Config{Endpoint: endpoint, Bearer: credential.Token}
-	if plugin == "plane" && (endpoint != plugindomain.PlaneHostedMCPOAuthURL || credential.Kind != "oauth") {
-		return cfg, errors.New("Plane requires the official OAuth MCP connection")
+	if plugin == "plane" {
+		if endpoint != plugindomain.PlaneHostedMCPPATURL || credential.Kind != "bearer" {
+			return cfg, errors.New("Plane requires the official PAT MCP connection")
+		}
+		if !planeWorkspaceSlugRE.MatchString(credential.WorkspaceSlug) {
+			return cfg, errors.New("Plane workspace slug is missing or invalid")
+		}
+		cfg.WorkspaceSlug = credential.WorkspaceSlug
 	}
 	if credential.Endpoint != endpoint {
 		return cfg, errors.New("plugin endpoint changed; reconnect required")

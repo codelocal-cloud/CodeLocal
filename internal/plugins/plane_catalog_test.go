@@ -2,7 +2,7 @@ package plugins
 
 import "testing"
 
-func TestPlaneIsOptInCloudOAuthPlugin(t *testing.T) {
+func TestPlaneIsOptInCloudPATPlugin(t *testing.T) {
 	entry, ok := FindBuiltin("plane")
 	if !ok {
 		t.Fatal("Plane plugin missing from built-in catalog")
@@ -24,13 +24,13 @@ func TestPlaneIsOptInCloudOAuthPlugin(t *testing.T) {
 		t.Fatalf("Plane must expose an MCP connection template: %#v", component)
 	}
 	template := component.AppTemplate
-	if template.Transport != TransportMCPHTTP || template.Auth.Kind != AuthOAuth2 {
-		t.Fatalf("Plane cloud plugin must use HTTP with OAuth: %#v", template)
+	if template.Transport != TransportMCPHTTP || template.Auth.Kind != AuthHeaderReference {
+		t.Fatalf("Plane cloud plugin must use HTTP with a token: %#v", template)
 	}
 	if len(template.Execution) != 1 || template.Execution[0] != ExecutionCloud {
 		t.Fatalf("Plane cloud plugin should not claim device execution: %#v", template.Execution)
 	}
-	if len(template.Fields) != 1 || template.Fields[0].Description != PlaneHostedMCPOAuthURL {
+	if len(template.Fields) != 3 || template.Fields[0].Description != PlaneHostedMCPPATURL || !template.Fields[2].Secret {
 		t.Fatalf("unexpected Plane MCP endpoint: %#v", template.Fields)
 	}
 	if err := ValidateManifest(entry.Manifest); err != nil {

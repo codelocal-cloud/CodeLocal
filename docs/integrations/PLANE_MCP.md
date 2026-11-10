@@ -1,29 +1,35 @@
-# Plane MCP in CodeLocal
+# Plane + CodeLocal: recommended integration
 
-CodeLocal can use Plane's official Model Context Protocol server. The integration adds **Plane Project Management** to Dashboard → Plugins → Explore as an opt-in Cloud OAuth plugin. This is separate from deploying a Plane project-management instance.
+**Architecture:** Keep Plane as a separate project-management service; use the official Plane MCP server from CodeLocal. Do not fork Plane into CodeLocal. Keep task data and Plane's DB outside CodeLocal's DB.
 
-## Plane Cloud: connect the built-in plugin
+## Primary option: Plane Cloud, CodeLocal Cloud MCP, encrypted workspace-scoped PAT
 
-1. Deploy the CodeLocal code changes, sign in, and open **Dashboard → Plugins → Explore**.
-2. Install **Plane Project Management**, then select **Configure**.
-3. Review the read/write/delete permissions and choose **Sign in with OAuth**.
-4. Sign in to Plane, choose the desired workspace and finish authorization.
-5. Confirm the connection lists discovered MCP tools before using it in Chat.
-6. Approve write/destructive tool calls individually when asked by CodeLocal.
+This is the default for remote AI agents and multiple user devices. It works without an online CodeLocal device and does not depend on Plane hosted OAuth callback allowlisting.
 
-Endpoint: `https://mcp.plane.so/http/mcp`. This uses Streamable HTTP and OAuth. It deliberately does **not** auto-install or auto-authorize accounts.
+1. In Plane, open **Profile Settings → Personal Access Tokens**. Create a token limited to the account/role required. Prefer a workspace token where available.
+2. Find your workspace slug in the Plane URL, e.g. `https://app.plane.so/example-team/` → `example-team`.
+3. In CodeLocal, open **Dashboard → Plugins → Explore → Plane Project Management → Install → Configure**.
+4. Use the prefilled official HTTPS MCP endpoint `https://mcp.plane.so/http/api-key/mcp`, enter the workspace slug and paste the token. Do **not** paste the token in a URL.
+5. Approve the requested permissions. CodeLocal probes MCP discovery; it reports ready only if discovery works.
+6. In Chat, use `list_plugin_tools` and `call_plugin_tool`; review and approve changes before any remote write.
 
-**Important:** Plane's hosted OAuth server uses a callback URI allowlist. CodeLocal's `/api/v1/plugins/oauth/callback` may not be allowlisted by the hosted service. If authorization is rejected, ask the Plane MCP service operator to allowlist the exact CodeLocal callback or deploy an MCP server configured with `PLANE_OAUTH_ALLOWED_REDIRECT_URIS`. Do **not** treat adding the plugin to the catalog as a working OAuth connection.
+CodeLocal stores the PAT and slug together in its account-bound encrypted Cloud credential store. Plane work items remain in Plane. CodeLocal's Cloud MCP client attaches `Authorization: Bearer <PAT>` and `x-workspace-slug: <slug>` only when sending to the exact official Plane PAT MCP endpoint. It does not make a global authorization token.
 
-## Plane Community Edition / self-hosted: local MCP Hub
+**Migration:** The previous built-in Plane v0.1.0 used OAuth. Users must reconnect with a Plane access token to use v0.2.0. Existing Plane OAuth credentials are not converted.
 
-The official Python server works against a private Plane instance through stdio. It requires Python 3.10+ and `uvx` (provided by [uv](https://docs.astral.sh/uv/)). Start CodeLocal from an environment that contains the following variable **names and values**, configured outside the repository:
+## Self-hosted Plane Community Edition: independent Docker deployment + local MCP
 
-- `PLANE_API_KEY`: a private Plane personal or workspace token
-- `PLANE_WORKSPACE_SLUG`: the Plane workspace slug
-- `PLANE_BASE_URL`: your Plane instance URL, e.g. `https://plane.example.com` (optional for Plane Cloud)
+Plane CE self-hosting requires more RAM and operational work than the MCP plugin. Deploy Plane in **its own Docker Compose stack on a long-running server** (not inside the CodeLocal web process). Keep backups for PostgreSQL and object storage, TLS, mail, credentials, and regular upgrades.
 
-Register the server in CodeLocal from your authorized workspace, after ensuring those variables are available to the CodeLocal runtime:
+Official self-host guide: https://developers.plane.so/self-hosting/methods/docker-compose
+
+For a private self-hosted Plane server, use the official stdio MCP server from an **authorized** CodeLocal device. Install Python 3.10+ and `uvx` and set these variables outside the repository:
+
+- `PLANE_API_KEY`: Plane personal/workspace access token
+- `PLANE_WORKSPACE_SLUG`: workspace slug
+- `PLANE_BASE_URL`: the self-hosted Plane URL, e.g. `https://plane.example.com`
+
+Then register local MCP:
 
 ```bash
 codelocal mcp add plane --global \
@@ -36,22 +42,20 @@ codelocal mcp probe plane
 codelocal mcp search workitem --server plane
 ```
 
-The `--env` values above are references to existing environment variables; do not put tokens into command arguments, Git, logs or MCP registry files. If using the default hosted API, omit the `--env PLANE_BASE_URL` flag and the variable.
+The `--env` flags reference existing environment variables without embedding token values in the MCP registry. Omit `--global` to scope registration to one project. **Local stdio needs the device running**; the hosted Cloud MCP PAT plugin does not work with a private Plane URL.
 
-To limit access to a single CodeLocal project, omit `--global` and run the command from that project directory. Local stdio requires a connected, authorized CodeLocal device; unlike Cloud, it cannot operate while that device is offline. Configure access and approvals according to the local MCP policy.
+For fully unattended self-hosted installations, deploy a dedicated protected Plane MCP service next to Plane and build account-specific auth handling (never one shared team admin token for all tenants). Do not expose a local stdio server or internal Plane API to the public Internet.
 
-## Other hosted option: PAT
+## Safety and acceptance
 
-Plane also provides `https://mcp.plane.so/http/api-key/mcp` for headless integrations, which requires both `Authorization: Bearer <PAT>` and `x-workspace-slug: <slug>`. **The built-in Cloud OAuth template does not implement this two-header PAT flow.** For PAT use a custom MCP connection that securely supports both headers or a local stdio server; do not paste PATs into public endpoint URLs.
+- Each CodeLocal account connects and encrypts **its own** PAT and slug; Plane roles still determine access
+- CodeLocal's MCP tool approval is preserved for writes and deletes
+- Revoking the PAT in Plane or disconnecting the CodeLocal plugin blocks new requests
+- Check project/work-item reads, a test work-item creation/update, approval denial, token rotation and account isolation
+- Test server restart, bad slug, bad PAT, and offline CodeLocal device
+- Do not consider the integration connected until MCP discovery returns real tools
+- Source code passing tests is not proof of a deployed Plane instance or a live user connection
 
-## Release acceptance checklist
-
-- [ ] Manifest validates and Plane appears in Plugins → Explore, not Installed by default
-- [ ] OAuth callback actually completes against the chosen Plane server; connection discovers tools
-- [ ] Read calls list projects and work items from the authorized workspace only
-- [ ] A test work item can be created/updated only after the normal CodeLocal approval
-- [ ] Rejected or expired approvals do not execute writes; disconnected accounts cannot call tools
-- [ ] Missing credentials, offline local runtime and unsupported callbacks show errors, not false success
-- [ ] No API keys, OAuth tokens or real customer work items are committed to the repository
-
-References: https://developers.plane.so/dev-tools/mcp-server and https://github.com/makeplane/plane-mcp-server
+References:
+- https://developers.plane.so/dev-tools/mcp-server
+- https://github.com/makeplane/plane-mcp-server

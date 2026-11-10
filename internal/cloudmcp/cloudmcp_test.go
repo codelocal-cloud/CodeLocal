@@ -60,7 +60,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestHTTPRejectsRedirectCrossOriginAndLargeResponse(t *testing.T) {
-	client, closeClient := newHTTPClient("https://example.com/mcp", "secret")
+	client, closeClient := newHTTPClient("https://example.com/mcp", "secret", "")
 	defer closeClient()
 	if client.CheckRedirect(nil, nil) == nil {
 		t.Fatal("redirect allowed")
@@ -89,6 +89,72 @@ func TestHTTPRejectsRedirectCrossOriginAndLargeResponse(t *testing.T) {
 	}
 }
 
+func TestPlanePATWorkspaceHeaderOnlyAtOfficialEndpoint(t *testing.T) {
+	calls := 0
+	transport := &guardedTransport{
+		origin:        "https://mcp.plane.so",
+		bearer:        "secret",
+		workspaceSlug: "team-a",
+		base: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			if r.Header.Get("Authorization") != "Bearer secret" || r.Header.Get("x-workspace-slug") != "team-a" {
+				t.Fatal("Plane MCP headers were not set from authenticated configuration")
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+		}),
+	}
+	req, _ := http.NewRequest(http.MethodPost, "https://mcp.plane.so/http/api-key/mcp", nil)
+	req.Header.Set("x-workspace-slug", "untrusted")
+	res, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if calls != 1 {
+		t.Fatalf("expected exactly 1 request, got %d", calls)
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "https://mcp.plane.so/http/mcp", nil)
+	if _, err := transport.RoundTrip(req); err == nil {
+		t.Fatal("workspace header leaked to another Plane endpoint")
+	}
+	req, _ = http.NewRequest(http.MethodPost, "https://example.com/mcp", nil)
+	if _, err := transport.RoundTrip(req); err == nil {
+		t.Fatal("cross-origin Plane header leaked")
+	}
+	if calls != 1 {
+		t.Fatalf("unexpected extra request: %d", calls)
+	}
+
+	other := &guardedTransport{
+		origin: "https://example.com",
+		base: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Header.Get("x-workspace-slug") != "" {
+				t.Fatal("caller-supplied Plane header must be removed for other MCPs")
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+		}),
+	}
+	req, _ = http.NewRequest(http.MethodGet, "https://example.com/mcp", nil)
+	req.Header.Set("x-workspace-slug", "spoofed")
+	res, err = other.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+}
+
+func TestPlaneWorkspaceHeaderRequiresTrustedEndpoint(t *testing.T) {
+	manager := NewManager()
+	_, err := manager.Discover(context.Background(), "user", Config{Endpoint: "https://example.com/mcp", WorkspaceSlug: "team-a"})
+	if err == nil || !strings.Contains(err.Error(), "official PAT") {
+		t.Fatalf("unexpected result: %v", err)
+	}
+	if manager.total != 0 {
+		t.Fatal("failed Plane validation retained MCP concurrency slot")
+	}
+}
+
 func fixtureManager(t *testing.T) (*Manager, *atomic.Int32) {
 	t.Helper()
 	calls := &atomic.Int32{}
@@ -105,7 +171,7 @@ func fixtureManager(t *testing.T) (*Manager, *atomic.Int32) {
 	t.Cleanup(httpServer.Close)
 	manager := NewManager()
 	// Only the network destination is swapped for a TLS fixture; URL/origin policy stays enabled.
-	manager.client = func(endpoint, bearer string) (*http.Client, func()) {
+	manager.client = func(endpoint, bearer, workspaceSlug string) (*http.Client, func()) {
 		client := &http.Client{}
 		base := httpServer.Client().Transport
 		client.Transport = &guardedTransport{origin: "https://example.com", bearer: bearer, base: roundTripFunc(func(r *http.Request) (*http.Response, error) {

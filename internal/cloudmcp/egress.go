@@ -110,9 +110,10 @@ func (b *boundedBody) Read(p []byte) (int, error) {
 }
 
 type guardedTransport struct {
-	base   http.RoundTripper
-	origin string
-	bearer string
+	base          http.RoundTripper
+	origin        string
+	bearer        string
+	workspaceSlug string
 }
 
 func (t *guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -125,8 +126,15 @@ func (t *guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	out := req.Clone(req.Context())
 	out.Header.Del("Authorization")
 	out.Header.Del("Cookie")
+	out.Header.Del("x-workspace-slug")
 	if t.bearer != "" {
 		out.Header.Set("Authorization", "Bearer "+t.bearer)
+	}
+	if t.workspaceSlug != "" {
+		if req.URL.String() != "https://mcp.plane.so/http/api-key/mcp" {
+			return nil, errors.New("Plane workspace header must not be sent to another endpoint")
+		}
+		out.Header.Set("x-workspace-slug", t.workspaceSlug)
 	}
 	res, err := t.base.RoundTrip(out)
 	if err != nil {
@@ -140,7 +148,7 @@ func (t *guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return res, nil
 }
 
-func newHTTPClient(endpoint, bearer string) (*http.Client, func()) {
+func newHTTPClient(endpoint, bearer, workspaceSlug string) (*http.Client, func()) {
 	d := publicDialer{
 		lookup: func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
@@ -154,10 +162,10 @@ func newHTTPClient(endpoint, bearer string) (*http.Client, func()) {
 	if u != nil && u.Host != "" {
 		origin = u.Scheme + "://" + u.Host
 	}
-	client := &http.Client{Timeout: 45 * time.Second, Transport: &guardedTransport{base: base, origin: origin, bearer: bearer},
+	client := &http.Client{Timeout: 45 * time.Second, Transport: &guardedTransport{base: base, origin: origin, bearer: bearer, workspaceSlug: workspaceSlug},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("MCP redirects are forbidden") }}
 	return client, base.CloseIdleConnections
 }
 
 // NewMetadataClient applies the same egress policy without any account token.
-func NewMetadataClient() (*http.Client, func()) { return newHTTPClient("", "") }
+func NewMetadataClient() (*http.Client, func()) { return newHTTPClient("", "", "") }

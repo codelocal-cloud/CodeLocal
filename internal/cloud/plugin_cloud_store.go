@@ -39,6 +39,7 @@ CREATE TABLE codelocal_plugin_oauth_flows (
 type PluginCloudCredential struct {
 	Kind          string `json:"kind"`
 	Endpoint      string `json:"endpoint"`
+	WorkspaceSlug string `json:"workspaceSlug,omitempty"`
 	Token         string `json:"token,omitempty"`
 	RefreshToken  string `json:"refreshToken,omitempty"`
 	TokenEndpoint string `json:"tokenEndpoint,omitempty"`

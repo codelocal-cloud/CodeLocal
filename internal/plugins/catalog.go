@@ -7,9 +7,9 @@ import (
 
 const ManagedPenpotMCPURL = "https://design.codelocal.cloud/mcp/stream"
 
-// PlaneHostedMCPOAuthURL is Plane's official hosted Streamable HTTP OAuth endpoint.
-// Self-hosted Plane Community Edition uses the local stdio MCP server instead.
-const PlaneHostedMCPOAuthURL = "https://mcp.plane.so/http/mcp"
+// Plane's PAT endpoint supports remote, per-account connections without OAuth
+// redirect allowlisting. Self-hosted Plane can use the local stdio MCP Hub.
+const PlaneHostedMCPPATURL = "https://mcp.plane.so/http/api-key/mcp"
 
 type CatalogEntry struct {
 	Manifest         Manifest        `json:"manifest"`
@@ -58,8 +58,8 @@ func builtinPenpotCatalogEntry() CatalogEntry {
 	}
 }
 
-// builtinPlaneCatalogEntry adds an opt-in Plane Cloud MCP integration.
-// Authentication uses CodeLocal's existing per-user OAuth and approval flow.
+// builtinPlaneCatalogEntry adds an opt-in hosted Plane MCP integration.
+// The workspace-scoped PAT is encrypted per CodeLocal account; tool calls still require approval.
 func builtinPlaneCatalogEntry() CatalogEntry {
 	return CatalogEntry{
 		Featured: true,
@@ -67,9 +67,9 @@ func builtinPlaneCatalogEntry() CatalogEntry {
 			SchemaVersion: SchemaVersion,
 			ID:            "plane",
 			Name:          "Plane Project Management",
-			Version:       "0.1.0",
+			Version:       "0.2.0",
 			Publisher:     Publisher{ID: "codelocal", Name: "CodeLocal", Verified: true},
-			Description:   "Manage Plane projects, work items, cycles, and modules with the official Plane MCP server. Requires a Plane account.",
+			Description:   "Manage Plane projects, work items, cycles, and modules through the official Plane MCP server using a workspace-scoped access token.",
 			Categories:    []string{"Project Management", "Productivity", "Developer Tools"},
 			Scope:         ScopeSystem,
 			Distribution:  DistributionInternal,
@@ -78,15 +78,14 @@ func builtinPlaneCatalogEntry() CatalogEntry {
 				ID:   "plane-mcp",
 				AppTemplate: &AppTemplateDefinition{
 					Transport:    TransportMCPHTTP,
-					Auth:         AuthDefinition{Kind: AuthOAuth2},
+					Auth:         AuthDefinition{Kind: AuthHeaderReference},
 					Capabilities: []Capability{CapabilityExternalRead, CapabilityExternalWrite, CapabilityExternalDelete, CapabilityNetwork},
 					Execution:    []ExecutionTarget{ExecutionCloud},
-					Fields: []AppTemplateField{{
-						Key:         "endpoint",
-						Label:       "Official Plane OAuth MCP endpoint",
-						Required:    true,
-						Description: PlaneHostedMCPOAuthURL,
-					}},
+					Fields: []AppTemplateField{
+						{Key: "endpoint", Label: "Official Plane PAT MCP endpoint", Required: true, Description: PlaneHostedMCPPATURL},
+						{Key: "workspaceSlug", Label: "Plane workspace slug", Required: true},
+						{Key: "bearerToken", Label: "Plane personal or workspace access token", Required: true, Secret: true},
+					},
 				},
 			}},
 		},
