@@ -2,6 +2,7 @@
   "use strict";
 
   const MESSAGE_TYPE = "codelocal:penpot-mcp-token";
+  const REQUEST_TYPE = "codelocal:penpot-mcp-token-request";
   const ALLOWED_PARENT_ORIGINS = new Set([
     "https://codelocal.cloud",
     "http://localhost:3000",
@@ -10,16 +11,19 @@
 
   if (window.parent === window) return;
 
+  // OIDC redirects can strip or replace document.referrer inside the iframe.
+  // Accept only a verified parent-window handshake from an allowed origin.
   let parentOrigin = "";
   try {
-    parentOrigin = new URL(document.referrer).origin;
+    const referrerOrigin = new URL(document.referrer).origin;
+    if (ALLOWED_PARENT_ORIGINS.has(referrerOrigin)) parentOrigin = referrerOrigin;
   } catch {
-    return;
+    // The trusted parent may still establish its origin via postMessage.
   }
-  if (!ALLOWED_PARENT_ORIGINS.has(parentOrigin)) return;
 
   let provisioning = false;
   let deliveredToken = "";
+  let mcpEnabledForSession = false;
 
   async function rpc(command, body) {
     const response = await fetch(`/api/rpc/command/${command}`, {
@@ -63,8 +67,8 @@
     return "";
   }
 
-  async function provision() {
-    if (provisioning || document.visibilityState === "hidden") return;
+  async function provision(forceDeliver = false) {
+    if (!parentOrigin || provisioning || document.visibilityState === "hidden") return;
     provisioning = true;
     try {
       let token = extractToken(await rpc("get-current-mcp-token", {}));
@@ -74,7 +78,14 @@
           type: "mcp",
         }));
       }
-      if (!token || token === deliveredToken) return;
+      if (!token) return;
+      if (!mcpEnabledForSession) {
+        // The native Penpot plugin only starts when the account MCP flag is enabled.
+        // Creating an MCP access token alone does not set this profile flag.
+        await rpc("update-profile-props", { props: { "mcp-enabled": true } });
+        mcpEnabledForSession = true;
+      }
+      if (!forceDeliver && token === deliveredToken) return;
       deliveredToken = token;
       window.parent.postMessage({ type: MESSAGE_TYPE, token }, parentOrigin);
     } catch {
@@ -83,6 +94,14 @@
       provisioning = false;
     }
   }
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent || event.data?.type !== REQUEST_TYPE ||
+        !ALLOWED_PARENT_ORIGINS.has(event.origin)) return;
+    parentOrigin = event.origin;
+    // Recheck the live session after the trusted parent completes its handshake.
+    void provision(true);
+  });
 
   void provision();
   window.setTimeout(() => void provision(), 2500);
