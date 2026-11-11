@@ -253,21 +253,39 @@ func (m *Manager) SetupPlaneSprint(ctx context.Context, user string, cfg Config,
 		out["cycle_created"] = false
 	}
 	out["cycle_id"] = cycleID
+
+	// Plane's workitem list rejects filtering by external_id on some
+	// self-hosted editions. Read the project inventory without filters,
+	// then match exact external keys and titles locally before any mutation.
+	existingRows := make([]map[string]any, 0)
+	cursor = ""
+	for page := 0; page < 10; page++ {
+		listArgs := map[string]any{"action": "list", "project_id": req.ProjectID, "per_page": 100}
+		if cursor != "" {
+			listArgs["cursor"] = cursor
+		}
+		result, listErr := call("workitem", listArgs)
+		if listErr != nil {
+			return stop("Cannot safely list work items: " + listErr.Error())
+		}
+		rows, parseErr := planeMCPItems(result)
+		if parseErr != nil {
+			return stop("Invalid work item inventory: " + parseErr.Error())
+		}
+		existingRows = append(existingRows, rows...)
+		next, _ := result["next_cursor"].(string)
+		if next == "" || next == cursor || result["next_page_results"] == false {
+			break
+		}
+		if page == 9 {
+			return stop("Project work item inventory truncated; refusing duplicate creation")
+		}
+		cursor = next
+	}
 	ids := make([]string, 0, len(req.Items))
 	for _, item := range req.Items {
-		found, err := call("workitem", map[string]any{
-			"action": "list", "project_id": req.ProjectID,
-			"external_id": item.Key, "external_source": planeSprintExternalSource, "per_page": 50,
-		})
-		if err != nil {
-			return stop("Cannot safely check existing task " + item.Key + ": " + err.Error())
-		}
-		rows, err := planeMCPItems(found)
-		if err != nil {
-			return stop(err.Error())
-		}
 		existing := ""
-		for _, row := range rows {
+		for _, row := range existingRows {
 			eid, _ := row["external_id"].(string)
 			title, _ := row["name"].(string)
 			if eid == item.Key || title == item.Name {
@@ -278,21 +296,18 @@ func (m *Manager) SetupPlaneSprint(ctx context.Context, user string, cfg Config,
 				existing = id
 			}
 		}
-		if existing == "" && len(rows) > 0 {
-			return stop("Plane returned existing rows for " + item.Key + " without a matching key or title; refusing to create a potential duplicate")
-		}
 		if existing != "" {
 			out["existing"] = append(out["existing"].([]map[string]string), map[string]string{"key": item.Key, "id": existing})
 			ids = append(ids, existing)
 			continue
 		}
-		created, err := call("workitem", map[string]any{
+		created, createErr := call("workitem", map[string]any{
 			"action": "create", "project_id": req.ProjectID,
 			"name": item.Name, "description_stripped": item.Description, "priority": item.Priority,
 			"external_source": planeSprintExternalSource, "external_id": item.Key,
 		})
-		if err != nil {
-			return stop("Task " + item.Key + " may have been created: " + err.Error())
+		if createErr != nil {
+			return stop("Task " + item.Key + " may have been created: " + createErr.Error())
 		}
 		id := planeMCPID(created)
 		if id == "" {
@@ -300,6 +315,7 @@ func (m *Manager) SetupPlaneSprint(ctx context.Context, user string, cfg Config,
 		}
 		out["created"] = append(out["created"].([]map[string]string), map[string]string{"key": item.Key, "id": id})
 		ids = append(ids, id)
+		existingRows = append(existingRows, map[string]any{"id": id, "name": item.Name, "external_id": item.Key})
 	}
 	if len(ids) != len(req.Items) {
 		return stop("Not all work items resolved")
