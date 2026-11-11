@@ -1,8 +1,36 @@
-# Plane Community Edition — isolated self-hosting for CodeLocal
+# Plane Community Edition — CodeLocal Tasks
+
+**Canonical URL:** [https://plane.codelocal.cloud](https://plane.codelocal.cloud)
+
+**Railway:** [project `codelocal.cloud`](https://railway.com/project/d5286319-d1c5-4b51-9022-ac3211ed8f2a) → **environment `plane`**.
+
+The November 11, 2026 deployment uses Plane CE AIO `v1.4.3`, service `PlaneApp`, separate `PlaneDB` (PostgreSQL), `PlaneCache` (Redis), `PlaneQueue` (RabbitMQ) and bucket `PlaneFiles`. The pre-existing `dev` environment remains separate. `planeapp-plane.up.railway.app` is a fallback only.
 
 This folder contains **operator checks and MCP onboarding**, not a fork of Plane. Never share CodeLocal's production database, Redis, secrets, or persistent volumes with Plane.
 
-## 1. Choose a host
+## Current Railway deployment and acceptance
+
+In Railway open environment `plane` → `PlaneApp` → Variables:
+
+- `DOMAIN_NAME=plane.codelocal.cloud`
+- `APP_PROTOCOL=https`
+- `WEB_URL=https://plane.codelocal.cloud`
+- `CORS_ALLOWED_ORIGINS=https://plane.codelocal.cloud`
+- `PORT=80` and `SITE_ADDRESS=:80` (**keep** these; the container reverse proxy listens on port 80 while Railway terminates TLS)
+- `ENABLE_SIGNUP=0` (invite only, after SMTP/verification is working)
+
+Initial admin login credentials are in the `PlaneApp` service variables. Change the generated password after signing in and **never expose it in Git or chat**. Configure SMTP and test password recovery/invitation emails before onboarding staff.
+
+The Railway domain is mapped to `PlaneApp:80`; Cloudflare's proxy can hide the CNAME and trigger a cosmetic `REQUIRES_UPDATE` from Railway. The assigned Railway CNAME target was `8cwgxkdl.up.railway.app` on 2026-11-11; do not alter a healthy proxy or delete its DNS record simply to remove the warning. Verify domain ownership, valid HTTPS, and both website and API HTTP 200 first.
+
+```bash
+PLANE_BASE_URL=https://plane.codelocal.cloud bash deploy/plane/verify.sh
+```
+
+A successful public check does not confirm a login, a workspace invitation, a real task create/update, backups or MCP connectivity. Test these separately.
+
+
+## 1. Optional: prepare a standalone Docker host
 
 Use a **separate Linux server** running Docker Compose. Plane's official minimum is 2 vCPU, 4 GiB RAM; 8 GiB is recommended for production. Reserve at least 20 GiB of free disk for the stack, logs and growth, plus a backup destination.
 
@@ -14,7 +42,7 @@ bash deploy/plane/doctor.sh
 
 A FAIL is a hard stop: do not delete unrelated Docker images, databases or volumes to make room. On the current MacBook, Docker has ~7.75 GiB allocated and only ~11 GiB disk space was available when checked (2026-11-11). It is **not safe** to start the full stack there.
 
-## 2. Install the *official* Plane Community stack on the dedicated host
+## 2. Optional: install the official Plane Community Docker stack
 
 Do not run third-party or unreviewed `curl | bash` scripts. Follow the official installer:
 
@@ -43,7 +71,7 @@ References: [Plane Docker Compose guide](https://developers.plane.so/self-hostin
 Finish Plane's initial admin/workspace setup yourself through its HTTPS UI. Generate a **least-privilege workspace access token**, then export these variables locally in your authorized CodeLocal runtime (do not paste them in chat):
 
 ```bash
-export PLANE_BASE_URL=https://tasks.example.com
+export PLANE_BASE_URL=https://plane.codelocal.cloud
 export PLANE_WORKSPACE_SLUG=example-team
 read -rs PLANE_API_KEY && export PLANE_API_KEY
 bash deploy/plane/verify.sh
@@ -54,10 +82,14 @@ This checks real Plane HTTP and REST authentication before registering the MCP c
 
 **Important:** The built-in CodeLocal **Cloud Plane plugin** is currently hard-restricted to Plane's hosted `mcp.plane.so` PAT endpoint. It does **not** connect to a private self-hosted Plane URL. Local CodeLocal MCP Hub stdio works with self-hosted Plane and requires the paired device to stay online. A 24/7 self-hosted remote MCP service would be a separate, access-controlled deployment.
 
-## 4. Railway option (requires a budget decision)
+## 4. Railway operations and costs
 
-Railway also has a [community-maintained Plane template](https://railway.com/deploy/plane-with-rabbitmq) including Postgres, Redis, RabbitMQ and MinIO. It is **not an official verified Plane template**. Review all images, variables, admin bootstrap and storage mounts before using it.
+The live Plane instance already runs in Railway project `codelocal.cloud`, but in a **separate `plane` environment** with distinct Plane-named services/storage. It is **not** a replacement for the pre-existing `dev` environment and should not depend on those database credentials.
 
-At the November 11, 2026 check, the connected Railway workspace had spent **$48.68 of a $100 hard limit** in the current cycle. Starting five or more additional always-on services could hit that shared cap and affect **other Railway projects**. Do not deploy this template into the existing `codelocal.cloud` Railway project, and do not raise workspace spending limits automatically.
+At the first November 11, 2026 check, Railway usage was $48.68 of a shared $100 hard limit. This amount can change, and Plane's always-on service usage contributes to the shared quota. Monitor project spending and avoid raising hard limits or deleting other workloads automatically.
 
-Once a separate server or spending budget has been approved, deploy to a dedicated Plane project and confirm site availability, workspace admin ownership, PAT, MCP probe, test work-item creation, backup restore and uptime. A code merge or passing CI does **not** imply the Plane server is live.
+The earlier `codelocal-plane` test project, if still present, is a separate Plane instance and database. Do **not** delete it until you have verified that any work items, user accounts and uploads worth retaining have been migrated or intentionally abandoned. Deleting the project does not migrate content into the current Plane.
+
+For support and maintenance: use the `plane` environment, check `PlaneApp` deployment health, monitor database volume/storage, configure SMTP, schedule backups and test restore. Rotate admin/API credentials and review access permissions regularly.
+
+Cloud CodeLocal's fixed `mcp.plane.so` hosted plugin is **not** a connector to this instance. For self-hosted MCP use the stdio path described above until a properly protected self-hosted MCP gateway is deployed.

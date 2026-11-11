@@ -17,9 +17,24 @@ CodeLocal stores the PAT and slug together in its account-bound encrypted Cloud 
 
 **Migration:** The previous built-in Plane v0.1.0 used OAuth. Users must reconnect with a Plane access token to use v0.2.0. Existing Plane OAuth credentials are not converted.
 
-## Self-hosted Plane Community Edition: independent Docker deployment + local MCP
+## Current CodeLocal Tasks installation (Railway, self-hosted)
 
-Plane CE self-hosting requires more RAM and operational work than the MCP plugin. Deploy Plane in **its own Docker Compose stack on a long-running server** (not inside the CodeLocal web process). Keep backups for PostgreSQL and object storage, TLS, mail, credentials, and regular upgrades.
+The active Plane Community Edition instance is now **[https://plane.codelocal.cloud](https://plane.codelocal.cloud)**.
+
+- Railway project: [`codelocal.cloud`](https://railway.com/project/d5286319-d1c5-4b51-9022-ac3211ed8f2a), **environment `plane`** (not the existing `dev` environment)
+- Services: `PlaneApp`, `PlaneDB`, `PlaneCache`, `PlaneQueue`, and object bucket `PlaneFiles`. They have separate credentials and persistent data from CodeLocal's `dev` environment.
+- Public URL: `https://plane.codelocal.cloud`; Railway's `https://planeapp-plane.up.railway.app` is an emergency fallback, **not** the canonical login/invitation URL.
+- PlaneApp variables: `DOMAIN_NAME=plane.codelocal.cloud`, `APP_PROTOCOL=https`, `WEB_URL=https://plane.codelocal.cloud`, `CORS_ALLOWED_ORIGINS=https://plane.codelocal.cloud`, `PORT=80`, `SITE_ADDRESS=:80`, and `ENABLE_SIGNUP=0`. Keep `SITE_ADDRESS=:80`: Plane's internal proxy listens on port 80 and Railway/Cloudflare terminate HTTPS.
+- The original admin account was provisioned by Plane's boot script; find `ADMIN_PASSWORD` securely at Railway → environment `plane` → `PlaneApp` → Variables. Never paste it into chat or check it into Git.
+- Only invited users should join until SMTP and the desired authentication methods are configured in Plane's God Mode. Having a public sign-in page does **not** mean anonymous users can create accounts.
+- Run `PLANE_BASE_URL=https://plane.codelocal.cloud bash deploy/plane/verify.sh` after changes; then test a real admin login, inviting a test member, and a test work item.
+- **MCP limitation:** CodeLocal's hosted Plane plugin only talks to Plane Cloud's fixed `mcp.plane.so` endpoint. For *this* self-hosted Railway installation use the **local stdio MCP** instructions below with a separate least-privilege PAT, or deploy a protected custom MCP gateway. Don't point the hosted PAT plugin at this URL.
+
+The domain's Railway DNS record may display `REQUIRES_UPDATE` if Cloudflare is proxying the record and hiding its target CNAME. Check that the HTTPS site and `/api/instances/` return HTTP 200, and the certificate/ownership validation is good before changing DNS. Railway's assigned CNAME target at rollout was `8cwgxkdl.up.railway.app`. Do not disable an otherwise healthy Cloudflare proxy simply to clear a cosmetic warning.
+
+## Alternative: independent Docker Compose deployment + local MCP
+
+Plane CE self-hosting requires more RAM and operational work than the MCP plugin. For a separate **non-Railway** install, deploy Plane in **its own Docker Compose stack** (not inside the CodeLocal web process). Keep backups for PostgreSQL and object storage, TLS, mail, credentials, and regular upgrades.
 
 Official self-host guide: https://developers.plane.so/self-hosting/methods/docker-compose
 
@@ -29,7 +44,7 @@ For a private self-hosted Plane server, use the official stdio MCP server from a
 
 - `PLANE_API_KEY`: Plane personal/workspace access token
 - `PLANE_WORKSPACE_SLUG`: workspace slug
-- `PLANE_BASE_URL`: the self-hosted Plane URL, e.g. `https://plane.example.com`
+- `PLANE_BASE_URL`: for CodeLocal Tasks, `https://plane.codelocal.cloud`
 
 Then register local MCP:
 
