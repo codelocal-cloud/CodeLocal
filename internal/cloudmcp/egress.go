@@ -137,6 +137,13 @@ func (t *guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 			return nil, errors.New("Plane workspace header must not be sent to another endpoint")
 		}
 		out.Header.Set("x-workspace-slug", t.workspaceSlug)
+		// Plane's PAT FastMCP transport currently supports through 2025-11-25.
+		// The Go SDK tries SEP-2575's 2026-07-28 discovery first, then falls
+		// back to legacy initialize. Its initialized notification may retain
+		// the newer protocol header even after that fallback, causing 400.
+		// Pin only these vetted Plane endpoints to the latest supported
+		// legacy transport version; never rewrite unrelated MCP requests.
+		out.Header.Set("Mcp-Protocol-Version", "2025-11-25")
 	}
 	res, err := t.base.RoundTrip(out)
 	if err != nil {

@@ -101,6 +101,9 @@ func TestPlanePATWorkspaceHeaderOnlyAtTrustedEndpoints(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer secret" || r.Header.Get("x-workspace-slug") != "team-a" {
 				t.Fatal("Plane MCP headers were not set from authenticated configuration")
 			}
+			if got := r.Header.Get("Mcp-Protocol-Version"); got != "2025-11-25" {
+				t.Fatalf("Plane's current FastMCP server requires the supported protocol header, got %q", got)
+			}
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
 		}),
 	}
