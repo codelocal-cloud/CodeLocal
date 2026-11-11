@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/0xmarkhydra/codelocal/internal/cloud"
@@ -123,8 +124,15 @@ func isPathFamily(path, root string) bool {
 	return path == root || strings.HasPrefix(path, root+"/")
 }
 
+var planeMCPApprovalPagePattern = regexp.MustCompile(`^/dashboard/plugins/approve/[a-f0-9]{48}$`)
+
 func isNextDashboardPath(path string) bool {
 	path = canonicalNextPresentationPath(path)
+	// The owner-only approval UI is an actual dynamic Next page. Route only
+	// its exact one-time ID shape; never proxy all nested /dashboard/plugins paths.
+	if planeMCPApprovalPagePattern.MatchString(path) {
+		return true
+	}
 	if isPathFamily(path, "/dashboard/blogs") {
 		return true
 	}
