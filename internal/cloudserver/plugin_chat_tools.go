@@ -175,7 +175,11 @@ func (s *Server) pluginApprovalAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) executeApprovedPlugin(ctx context.Context, identity *webauth.Identity, a cloud.PluginApproval) (map[string]any, error) {
-	ctx, cancel := context.WithTimeout(ctx, 50*time.Second)
+	callTimeout := 50 * time.Second
+	if a.PluginID == "plane" && a.Tool == cloudmcp.PlaneSprintBatchToolName {
+		callTimeout = 170 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
 	c, exists, err := s.Store.PluginConnectionByDevice(ctx, identity.User.ID, a.PluginID, a.DeviceID)
 	if err != nil || !exists || c.UpdatedAt != a.Version {
@@ -195,7 +199,11 @@ func (s *Server) executeApprovedPlugin(ctx context.Context, identity *webauth.Id
 			if err != nil {
 				return err
 			}
-			result, err = s.CloudMCP.CallApproved(ctx, identity.User.ID, cfg, a.Tool, a.Arguments)
+			if a.PluginID == "plane" && a.Tool == cloudmcp.PlaneSprintBatchToolName {
+				result, err = s.CloudMCP.SetupPlaneSprint(ctx, identity.User.ID, cfg, a.Arguments)
+			} else {
+				result, err = s.CloudMCP.CallApproved(ctx, identity.User.ID, cfg, a.Tool, a.Arguments)
+			}
 			return err
 		})
 		return result, err

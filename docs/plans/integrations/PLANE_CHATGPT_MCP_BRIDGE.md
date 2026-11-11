@@ -18,6 +18,12 @@
 4. **Verification** — tests for legacy MCP ABI, alias scoping, endpoint allowlist and approval fail-closed; full Go suite, vet, repo checks and deployment staging/main CI. Check live `mcp(action=list)` and `mcp(action=search,server=cloud:plane)` from ChatGPT. Execute a real Plane mutation only when the client supports elicitation and the user accepts.
 5. **Mobile sprint tasks** — create/check the 22 prepared `S1-MOB-01`…`S1-MOB-22` work items on **SocCo**, link to Sprint 1 after confirming the target project/cycle. Detect existing IDs first; do not duplicate or invent owners/due dates. Scope only mobile Web/PWA iOS/Android: auth, chat, groups, voice/media, push and QA. **Exclude Marketplace, Point/Coin, checkout and desktop release.**
 
+## One-confirmation Sprint 1 bulk workflow
+
+CodeLocal also exposes a **bounded bridge-only** `batch_create_sprint` tool under `cloud:plane`. This is not a native Plane tool. It accepts the exact project UUID, cycle name, owner UUID, and 1–25 items with unique keys, descriptions, and priorities. It creates or reuses the matching cycle, reads by external source/id before creating work items, attaches them to the cycle and verifies membership.
+
+One authenticated browser approval displays all arguments before any action. The work is then performed with the existing per-account encrypted Plane PAT; the PAT never leaves CodeLocal Cloud. If any call has an unknown outcome, the batch **stops immediately**, reports the created or existing subset and never retries a mutation automatically. Do not call the tool again until existing item IDs have been inspected. This workflow is restricted to the already-trusted Plane PAT endpoint and same authenticated owner, and it does not enable arbitrary batch tool execution.
+
 ## Definition of Done
 
 - **Bridge tests** pass and unchanged local extension routing remains compatible with previously connected clients.

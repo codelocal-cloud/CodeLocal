@@ -96,6 +96,8 @@ func (s *Service) callPlaneCloudMCP(ctx context.Context, user string, args map[s
 	if err != nil {
 		return errorResult(err), nil
 	}
+	// This is a bounded CodeLocal workflow, not an extra native Plane tool.
+	tools = append(tools, cloudmcp.PlaneSprintBatchTool)
 	switch action {
 	case "search":
 		query, _ := args["query"].(string)
@@ -112,7 +114,7 @@ func (s *Service) callPlaneCloudMCP(ctx context.Context, user string, args map[s
 				}
 			}
 		}
-		return textResult(map[string]any{"server": planeCloudMCPAlias, "connection": "ready", "toolsTotal": len(tools), "results": results, "endpoint": c.Endpoint}, false), nil
+		return textResult(map[string]any{"server": planeCloudMCPAlias, "connection": "ready", "nativeTools": len(tools) - 1, "bridgeWorkflows": 1, "results": results, "endpoint": c.Endpoint}, false), nil
 	case "info":
 		name, _ := args["tool"].(string)
 		for _, tool := range tools {
@@ -150,11 +152,18 @@ func (s *Service) callApprovedPlaneCloudMCP(ctx context.Context, user string, c 
 		return errorResult(errors.New("Plane tool arguments must be an object")), nil
 	}
 	payload, err := json.Marshal(arguments)
-	if err != nil || len(payload) > maxCloudPluginApprovalPreview {
-		return errorResult(fmt.Errorf("Plane tool arguments must fit within %d bytes for explicit review", maxCloudPluginApprovalPreview)), nil
+	maxPreview := maxCloudPluginApprovalPreview
+	if name == cloudmcp.PlaneSprintBatchToolName {
+		if _, validateErr := cloudmcp.ValidatePlaneSprintBatch(arguments); validateErr != nil {
+			return errorResult(validateErr), nil
+		}
+		maxPreview = 60 << 10
+	}
+	if err != nil || len(payload) > maxPreview {
+		return errorResult(fmt.Errorf("Plane tool arguments must fit within %d bytes for explicit review", maxPreview)), nil
 	}
 	confirmed := false
-	if req != nil && req.Session != nil {
+	if name != cloudmcp.PlaneSprintBatchToolName && req != nil && req.Session != nil {
 		response, elicitErr := req.Session.Elicit(ctx, &mcp.ElicitParams{
 			Mode:    "form",
 			Message: "Approve one Plane MCP operation on your CodeLocal account?\nTool: " + name + "\nEndpoint: " + c.Endpoint + "\nArguments: " + string(payload),
@@ -202,7 +211,11 @@ func (s *Service) callApprovedPlaneCloudMCP(ctx context.Context, user string, c 
 		if err != nil {
 			return err
 		}
-		output, err = s.CloudMCP.CallApproved(ctx, user, fresh, approved.Tool, approved.Arguments)
+		if approved.Tool == cloudmcp.PlaneSprintBatchToolName {
+			output, err = s.CloudMCP.SetupPlaneSprint(ctx, user, fresh, approved.Arguments)
+		} else {
+			output, err = s.CloudMCP.CallApproved(ctx, user, fresh, approved.Tool, approved.Arguments)
+		}
 		return err
 	})
 	status := "done"
