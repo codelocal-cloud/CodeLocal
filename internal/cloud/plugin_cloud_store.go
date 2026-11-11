@@ -317,18 +317,22 @@ func (s *Store) PluginMCPApproval(ctx context.Context, user, id string) (PluginA
 		return a, errors.New("plugin approval unavailable")
 	}
 	var nonce, ciphertext []byte
-	err := s.DB.QueryRow(ctx, `SELECT nonce,ciphertext FROM codelocal_plugin_approvals
+	// SessionID and UserID are deliberately excluded from encrypted JSON;
+	// retrieve the bound session from the owner-scoped database row.
+	err := s.DB.QueryRow(ctx, `SELECT session_id,nonce,ciphertext FROM codelocal_plugin_approvals
 WHERE id=$1 AND user_id=$2 AND session_id LIKE 'mcp:%'
 AND plugin_id='plane' AND device_id='cloud'
-AND status='pending' AND expires_at>$3`, id, user, time.Now().UnixMilli()).Scan(&nonce, &ciphertext)
+AND status='pending' AND expires_at>$3`, id, user, time.Now().UnixMilli()).Scan(&a.SessionID, &nonce, &ciphertext)
 	if err != nil {
 		return a, err
 	}
+	boundSession := a.SessionID
 	err = openPluginValue(nonce, ciphertext, "plugin-approval\x00"+user+"\x00"+id, &a)
 	if err != nil {
 		return PluginApproval{}, err
 	}
-	if a.UserID != user || a.PluginID != "plane" || a.DeviceID != PluginCloudDeviceID ||
+	a.UserID, a.SessionID = user, boundSession
+	if a.PluginID != "plane" || a.DeviceID != PluginCloudDeviceID ||
 		!strings.HasPrefix(a.SessionID, "mcp:") {
 		return PluginApproval{}, errors.New("plugin approval scope is invalid")
 	}
