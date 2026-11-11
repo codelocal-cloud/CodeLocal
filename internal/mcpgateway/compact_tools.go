@@ -543,6 +543,9 @@ func registerCompactTools(server *mcp.Server, service *Service, userID string) {
 							"servers": cloudServers, "localUnavailable": true,
 						}, false), nil)
 					}
+					if payload, ok := result.StructuredContent.(map[string]any); ok {
+						payload["cloudServers"] = cloudServers
+					}
 					raw, _ := json.Marshal(map[string]any{"cloudServers": cloudServers})
 					result.Content = append(result.Content, &mcp.TextContent{Text: string(raw)})
 				}

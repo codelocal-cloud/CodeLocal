@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -92,6 +93,16 @@ func (m *Manager) open(ctx context.Context, user string, cfg Config) (*mcp.Clien
 		Endpoint: endpoint, HTTPClient: httpClient, MaxRetries: -1, DisableStandaloneSSE: true,
 	}, nil)
 	if err != nil {
+		// Never log bearer tokens; this bounded diagnostic identifies remote
+		// protocol incompatibilities without exporting user credentials.
+		reason := err.Error()
+		if cfg.Bearer != "" {
+			reason = strings.ReplaceAll(reason, cfg.Bearer, "[REDACTED]")
+		}
+		if len(reason) > 320 {
+			reason = reason[:320]
+		}
+		slog.Warn("Cloud MCP handshake failed", "cause", reason)
 		closeHTTP()
 		release()
 		return nil, nil, errors.New("MCP connection failed; verify endpoint and authorization")
