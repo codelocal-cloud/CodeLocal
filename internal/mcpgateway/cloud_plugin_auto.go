@@ -23,6 +23,9 @@ func planeAutoActionAllowed(tool string, arguments map[string]any) bool {
 	if arguments == nil {
 		return false
 	}
+	if tool == cloudmcp.SocCoMobileCleanupToolName {
+		return len(arguments) == 0
+	}
 	if tool == cloudmcp.PlaneSprintBatchToolName {
 		// Batch is explicitly scoped to project/cycle and uses unique
 		// external IDs, provider read-before-create and no mutation retries.
@@ -139,6 +142,8 @@ func (s *Service) callAutoPlaneCloudMCP(ctx context.Context, user string, c clou
 				}
 			}
 			output, callErr = s.CloudMCP.SetupPlaneSprint(ctx, user, fresh, input)
+		} else if name == cloudmcp.SocCoMobileCleanupToolName {
+			output, callErr = s.CloudMCP.CleanupSocCoMobileBacklog(ctx, user, fresh)
 		} else {
 			output, callErr = s.CloudMCP.CallApproved(ctx, user, fresh, name, arguments)
 		}

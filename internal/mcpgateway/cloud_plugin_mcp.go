@@ -97,7 +97,7 @@ func (s *Service) callPlaneCloudMCP(ctx context.Context, user string, args map[s
 		return errorResult(err), nil
 	}
 	// This is a bounded CodeLocal workflow, not an extra native Plane tool.
-	tools = append(tools, cloudmcp.PlaneSprintBatchTool)
+	tools = append(tools, cloudmcp.PlaneSprintBatchTool, cloudmcp.SocCoMobileCleanupTool)
 	switch action {
 	case "search":
 		query, _ := args["query"].(string)
