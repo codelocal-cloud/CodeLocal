@@ -17,6 +17,7 @@ import (
 
 	"github.com/0xmarkhydra/codelocal/internal/clientupdate"
 	"github.com/0xmarkhydra/codelocal/internal/cloud"
+	"github.com/0xmarkhydra/codelocal/internal/cloudmcp"
 	"github.com/0xmarkhydra/codelocal/internal/decision"
 	"github.com/0xmarkhydra/codelocal/internal/decisionruntime"
 	"github.com/0xmarkhydra/codelocal/internal/gateway"
@@ -27,6 +28,7 @@ import (
 
 type Service struct {
 	Store                *cloud.Store
+	CloudMCP             *cloudmcp.Manager
 	Hub                  *gateway.Hub
 	Workspaces           *gateway.WorkspaceService
 	Memory               longTermMemoryStore
@@ -53,6 +55,7 @@ func New(store *cloud.Store, hub *gateway.Hub, workspaces *gateway.WorkspaceServ
 	decisionRuntime := decisionruntime.FromEnv()
 	return &Service{
 		Store:                store,
+		CloudMCP:             cloudmcp.NewManager(),
 		Hub:                  hub,
 		Workspaces:           workspaces,
 		Memory:               memoryStore,

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/0xmarkhydra/codelocal/internal/plugins"
@@ -304,6 +305,34 @@ func (s *Store) PluginApproval(ctx context.Context, user, session, id string) (P
 	}
 	err = openPluginValue(nonce, ciphertext, "plugin-approval\x00"+user+"\x00"+id, &a)
 	return a, err
+}
+
+// PluginMCPApproval lets the logged-in owner review a pending approval that
+// originated from their OAuth-authenticated ChatGPT MCP session. Only the
+// dedicated Plane/Cloud scope is cross-session; normal dashboard approvals
+// stay bound to their original browser session.
+func (s *Store) PluginMCPApproval(ctx context.Context, user, id string) (PluginApproval, error) {
+	var a PluginApproval
+	if s == nil || s.DB == nil || user == "" || id == "" {
+		return a, errors.New("plugin approval unavailable")
+	}
+	var nonce, ciphertext []byte
+	err := s.DB.QueryRow(ctx, `SELECT nonce,ciphertext FROM codelocal_plugin_approvals
+WHERE id=$1 AND user_id=$2 AND session_id LIKE 'mcp:%'
+AND plugin_id='plane' AND device_id='cloud'
+AND status='pending' AND expires_at>$3`, id, user, time.Now().UnixMilli()).Scan(&nonce, &ciphertext)
+	if err != nil {
+		return a, err
+	}
+	err = openPluginValue(nonce, ciphertext, "plugin-approval\x00"+user+"\x00"+id, &a)
+	if err != nil {
+		return PluginApproval{}, err
+	}
+	if a.UserID != user || a.PluginID != "plane" || a.DeviceID != PluginCloudDeviceID ||
+		!strings.HasPrefix(a.SessionID, "mcp:") {
+		return PluginApproval{}, errors.New("plugin approval scope is invalid")
+	}
+	return a, nil
 }
 
 // WithPluginCloudConnection pins the approved configuration through dispatch.

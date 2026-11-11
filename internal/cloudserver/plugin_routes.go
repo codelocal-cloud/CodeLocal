@@ -14,6 +14,10 @@ func (s *Server) registerPluginRoutes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/v1/mcp/connections/{target}/{name}", webutil.RateLimit(s.Store, webutil.RateLimitOptions{Scope: "mcp-update-ip", Limit: 60, Window: 10 * time.Minute}, dashboardJSONCSRF(http.HandlerFunc(s.mcpConnectionUpdateAPI))))
 	mux.Handle("DELETE /api/v1/mcp/connections/{target}/{name}", webutil.RateLimit(s.Store, webutil.RateLimitOptions{Scope: "mcp-disconnect-ip", Limit: 60, Window: 10 * time.Minute}, dashboardJSONCSRF(http.HandlerFunc(s.mcpConnectionDeleteAPI))))
 	mux.HandleFunc("GET /api/v1/plugin-approvals/{approvalID}", s.pluginApprovalDetailsAPI)
+	mux.HandleFunc("GET /api/v1/plugin-mcp-approvals/{approvalID}", s.pluginMCPApprovalDetailsAPI)
+	mux.Handle("POST /api/v1/plugin-mcp-approvals/{approvalID}", webutil.RateLimit(s.Store, webutil.RateLimitOptions{
+		Scope: "plugin-mcp-approve-ip", Limit: 30, Window: time.Minute,
+	}, dashboardJSONCSRF(http.HandlerFunc(s.pluginMCPApprovalConfirmAPI))))
 	mux.HandleFunc("GET /api/v1/plugins/oauth/client", s.pluginOAuthMetadata)
 	mux.HandleFunc("GET /api/v1/plugins/oauth/callback", s.pluginOAuthCallback)
 	mux.Handle("POST /api/v1/plugins/{pluginID}/oauth", webutil.RateLimit(s.Store, webutil.RateLimitOptions{Scope: "plugin-oauth-ip", Limit: 10, Window: time.Minute}, dashboardJSONCSRF(http.HandlerFunc(s.pluginOAuthStart))))

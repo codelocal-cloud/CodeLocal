@@ -451,6 +451,8 @@ func compactToolDefinitions() []compactToolDef {
 
 	agent := byName["agent"]
 	agent.Description += " status=needs_continuation means the objective is unfinished; use nextAction and fresh context to plan another bounded call. Only status=ready indicates verified completion. A halted result needs its reason handled before resuming."
+	cloudMCP := byName["mcp"]
+	cloudMCP.Description = "List/search/inspect/call local MCP servers and the account-scoped cloud:plane connection. Cloud Plane reuses CodeLocal's encrypted PAT; calls require explicit user confirmation."
 	defs := []compactToolDef{
 		workspace,
 		contextDef,
@@ -461,7 +463,7 @@ func compactToolDefinitions() []compactToolDef {
 		byName["verify"],
 		byName["git"],
 		terminal,
-		byName["mcp"],
+		cloudMCP,
 		byName["social"],
 		byName["blog"],
 		byName["browser"],
@@ -493,6 +495,12 @@ func registerCompactTools(server *mcp.Server, service *Service, userID string) {
 			args, err := decodeArgs(req)
 			if err != nil {
 				return wrap(errorResult(err), nil)
+			}
+			if definition.Name == "mcp" {
+				if serverName, _ := args["server"].(string); strings.HasPrefix(serverName, "cloud:") {
+					result, callErr := service.callPlaneCloudMCP(ctx, userID, args, req)
+					return wrap(result, callErr)
+				}
 			}
 			if definition.Execute != nil {
 				result, callErr := definition.Execute(ctx, service, userID, args, req)
@@ -526,6 +534,19 @@ func registerCompactTools(server *mcp.Server, service *Service, userID string) {
 				return wrap(errorResult(err), nil)
 			}
 			result, callErr := service.callOperationRemembering(ctx, userID, definition.Name, operation, forward, req)
+			if definition.Name == "mcp" && args["action"] == "list" {
+				if cloudServers := service.planeCloudMCPServers(ctx, userID); len(cloudServers) > 0 {
+					// Cloud-only discovery must work even when every local
+					// device is offline; preserve the legacy local result if available.
+					if callErr != nil || result == nil || result.IsError {
+						return wrap(textResult(map[string]any{
+							"servers": cloudServers, "localUnavailable": true,
+						}, false), nil)
+					}
+					raw, _ := json.Marshal(map[string]any{"cloudServers": cloudServers})
+					result.Content = append(result.Content, &mcp.TextContent{Text: string(raw)})
+				}
+			}
 			service.captureDirectLearnedSkill(ctx, userID, definition.Name, operation, forward, result, callErr, req)
 			return wrap(result, callErr)
 		})

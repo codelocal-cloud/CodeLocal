@@ -114,6 +114,35 @@ CREATE TABLE codelocal_runtime_secrets(user_id text,scope text,device_id text,wo
 	if _, err := s.TakePluginApproval(ctx, "A", "session-A", approval.ID, false); err == nil {
 		t.Fatal("completed approval was reusable")
 	}
+	// Browser approval of an MCP-originated Plane request is permitted only
+	// for the same account and the dedicated mcp: / cloud / plane scope.
+	mcpApproval, err := s.CreatePluginApproval(ctx, PluginApproval{
+		UserID: "A", SessionID: "mcp:stateless", PluginID: "plane", DeviceID: "cloud",
+		Version: 42, Tool: "create_work_item", Arguments: map[string]any{"name": "mobile task"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PluginMCPApproval(ctx, "B", mcpApproval.ID); err == nil {
+		t.Fatal("another account must not read an MCP approval")
+	}
+	view, err := s.PluginMCPApproval(ctx, "A", mcpApproval.ID)
+	if err != nil || view.SessionID != mcpApproval.SessionID || view.Arguments["name"] != "mobile task" {
+		t.Fatalf("owner MCP approval lookup failed: %v", err)
+	}
+	if _, err := s.TakePluginApproval(ctx, "A", "mcp:wrong", mcpApproval.ID, false); err == nil {
+		t.Fatal("different originating MCP session cannot consume an approval")
+	}
+	if _, err := s.TakePluginApproval(ctx, "A", view.SessionID, mcpApproval.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PluginMCPApproval(ctx, "A", mcpApproval.ID); err == nil {
+		t.Fatal("denied approval must not remain pending")
+	}
+	if _, err := s.PluginMCPApproval(ctx, "A", approval.ID); err == nil {
+		t.Fatal("normal dashboard approvals must never be exposed through MCP approval route")
+	}
+
 	if removed, err := s.DeletePluginCloudConnection(ctx, "A", "penpot"); err != nil || !removed {
 		t.Fatal("disconnect", err)
 	}
