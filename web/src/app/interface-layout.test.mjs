@@ -66,6 +66,11 @@ assert.ok(declarations(dashboardChrome, ".rail", "display").includes("none"), "M
 assert.ok(declarations(dashboardChrome, ".sidebarPanel", "overflow-y").includes("auto"), "Sidebar menu must remain scrollable");
 assert.ok(declarations(dashboardChrome, ".railLink", "min-height").includes("50px"), "Quick links need touch-sized targets");
 assert.ok(read("./dashboard/plugins/plugins-hub.tsx").includes('t("Extend CodeLocal with reusable tools and external data.")'));
+const planeDialog = read("./dashboard/plugins/plugin-connect-dialog.tsx");
+assert.match(planeDialog, /codeLocalPlaneMcpEndpoint = "https:\/\/planemcp-plane\.up\.railway\.app\/http\/api-key\/mcp"/, "Plane must prefer CodeLocal Tasks MCP");
+assert.match(planeDialog, /hostedPlaneMcpEndpoint = "https:\/\/mcp\.plane\.so\/http\/api-key\/mcp"/, "Plane Cloud must stay available");
+assert.ok(planeDialog.includes('t("CodeLocal Tasks (self-hosted)")'), "Users must be able to choose self-hosted Plane");
+assert.ok(planeDialog.includes('t("Plane Cloud")'), "Users must be able to choose Plane Cloud");
 // Regression contract: a visual redesign must keep the original authenticated flows.
 const plugins = read("./dashboard/plugins/plugins-hub.tsx");
 for (const endpoint of [

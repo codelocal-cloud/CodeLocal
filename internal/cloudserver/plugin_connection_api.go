@@ -266,7 +266,7 @@ func (s *Server) pluginConnectAPI(w http.ResponseWriter, r *http.Request) {
 	// Plane's hosted integration uses a per-user encrypted PAT and workspace
 	// slug, never a shared CodeLocal token or an OAuth redirect exception.
 	if pluginID == "plane" {
-		if input.ExecutionTarget != "cloud" || input.Endpoint != plugindomain.PlaneHostedMCPPATURL || input.AuthKind != "bearer" || input.BearerEnv != "" {
+		if input.ExecutionTarget != "cloud" || !plugindomain.IsPlaneMCPPATEndpoint(input.Endpoint) || input.AuthKind != "bearer" || input.BearerEnv != "" {
 			webutil.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_plane_connection"})
 			return
 		}
@@ -584,8 +584,8 @@ func (s *Server) pluginCloudConnect(w http.ResponseWriter, r *http.Request, iden
 func (s *Server) pluginCloudConfig(ctx context.Context, user, plugin, endpoint string, credential cloud.PluginCloudCredential, probe bool) (cloudmcp.Config, error) {
 	cfg := cloudmcp.Config{Endpoint: endpoint, Bearer: credential.Token}
 	if plugin == "plane" {
-		if endpoint != plugindomain.PlaneHostedMCPPATURL || credential.Kind != "bearer" {
-			return cfg, errors.New("Plane requires the official PAT MCP connection")
+		if !plugindomain.IsPlaneMCPPATEndpoint(endpoint) || credential.Kind != "bearer" {
+			return cfg, errors.New("Plane requires a trusted PAT MCP connection")
 		}
 		if !planeWorkspaceSlugRE.MatchString(credential.WorkspaceSlug) {
 			return cfg, errors.New("Plane workspace slug is missing or invalid")

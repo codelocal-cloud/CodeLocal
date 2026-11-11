@@ -63,6 +63,7 @@ type ConnectionInput = {
 
 const hostedPenpotMcpEndpoint = "https://design.codelocal.cloud/mcp/stream";
 const hostedPlaneMcpEndpoint = "https://mcp.plane.so/http/api-key/mcp";
+const codeLocalPlaneMcpEndpoint = "https://planemcp-plane.up.railway.app/http/api-key/mcp";
 
 const permissionLabels: Record<string, string> = {
   external_read: "Read external data",
@@ -144,7 +145,7 @@ export function PluginConnectDialog({
   const [feedback, setFeedback] = useState("");
   const [connectionAcknowledged, setConnectionAcknowledged] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] = useState("");
-  const [endpoint, setEndpoint] = useState(() => isPlane ? hostedPlaneMcpEndpoint : (existing?.endpoint ?? (isPenpot ? hostedPenpotMcpEndpoint : "")));
+  const [endpoint, setEndpoint] = useState(() => isPlane ? (existing?.endpoint ?? codeLocalPlaneMcpEndpoint) : (existing?.endpoint ?? (isPenpot ? hostedPenpotMcpEndpoint : "")));
   const [bearerToken, setBearerToken] = useState("");
   const [workspaceSlug, setWorkspaceSlug] = useState("");
   const [bearerEnv, setBearerEnv] = useState(() => existing?.credentialRef?.startsWith("CODELOCAL_PLUGIN_") ? "" : existing?.credentialRef ?? "");
@@ -308,16 +309,23 @@ export function PluginConnectDialog({
               </div>
             </div>
             <label className={styles.field}>
-              <span>{t("MCP endpoint")}</span>
-              <input
-                autoComplete="off"
-                inputMode="url"
-                onChange={(event) => setEndpoint(event.target.value)}
-                placeholder="https://example.com/mcp"
-                readOnly={isPenpot || isPlane}
-                type="url"
-                value={endpoint}
-              />
+              <span>{isPlane ? t("Plane workspace provider") : t("MCP endpoint")}</span>
+              {isPlane ? (
+                <select value={endpoint} onChange={(event) => { setEndpoint(event.target.value); setBearerToken(""); setWorkspaceSlug(""); }}>
+                  <option value={codeLocalPlaneMcpEndpoint}>{t("CodeLocal Tasks (self-hosted)")}</option>
+                  <option value={hostedPlaneMcpEndpoint}>{t("Plane Cloud")}</option>
+                </select>
+              ) : (
+                <input
+                  autoComplete="off"
+                  inputMode="url"
+                  onChange={(event) => setEndpoint(event.target.value)}
+                  placeholder="https://example.com/mcp"
+                  readOnly={isPenpot}
+                  type="url"
+                  value={endpoint}
+                />
+              )}
             </label>
             {!isPenpot && !isPlane && <label className={styles.field}>
               <span>{t("Authentication")}</span>
@@ -357,7 +365,7 @@ export function PluginConnectDialog({
                 : "Tool calls require your approval in chat. Cloud credentials stay on CodeLocal.")}
             </p>
             {isPenpot && <p className={styles.configWarning}>{t("Penpot editing requires an active editor bridge. A hosted MCP endpoint alone does not prove background editing works.")}</p>}
-            {isPlane && <p className={styles.configWarning}>{t("Generate a Plane access token in Profile Settings, then enter your workspace slug. For self-hosted Plane use CodeLocal's local MCP Hub.")}</p>}
+            {isPlane && <p className={styles.configWarning}>{t("Create a personal or workspace token in the selected Plane instance, enter its workspace slug, and connect. CodeLocal stores your token encrypted per account; no MacBook required.")}</p>}
           </div>
         ) : (
           <div className={styles.configPanel}>

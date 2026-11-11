@@ -7,9 +7,15 @@ import (
 
 const ManagedPenpotMCPURL = "https://design.codelocal.cloud/mcp/stream"
 
-// Plane's PAT endpoint supports remote, per-account connections without OAuth
-// redirect allowlisting. Self-hosted Plane can use the local stdio MCP Hub.
+// Trusted Plane PAT endpoints support per-account encrypted connections without
+// a Plane OAuth app, including CodeLocal's self-hosted Community Edition gateway.
 const PlaneHostedMCPPATURL = "https://mcp.plane.so/http/api-key/mcp"
+const PlaneCodeLocalMCPPATURL = "https://planemcp-plane.up.railway.app/http/api-key/mcp"
+
+// Only these vetted MCP endpoints may receive a user's encrypted Plane PAT.
+func IsPlaneMCPPATEndpoint(endpoint string) bool {
+	return endpoint == PlaneCodeLocalMCPPATURL || endpoint == PlaneHostedMCPPATURL
+}
 
 type CatalogEntry struct {
 	Manifest         Manifest        `json:"manifest"`
@@ -67,9 +73,9 @@ func builtinPlaneCatalogEntry() CatalogEntry {
 			SchemaVersion: SchemaVersion,
 			ID:            "plane",
 			Name:          "Plane Project Management",
-			Version:       "0.2.0",
+			Version:       "0.3.0",
 			Publisher:     Publisher{ID: "codelocal", Name: "CodeLocal", Verified: true},
-			Description:   "Manage Plane projects, work items, cycles, and modules through the official Plane MCP server using a workspace-scoped access token.",
+			Description:   "Manage CodeLocal Tasks at plane.codelocal.cloud or Plane Cloud through a trusted Plane MCP server using your own workspace-scoped access token.",
 			Categories:    []string{"Project Management", "Productivity", "Developer Tools"},
 			Scope:         ScopeSystem,
 			Distribution:  DistributionInternal,
@@ -82,7 +88,7 @@ func builtinPlaneCatalogEntry() CatalogEntry {
 					Capabilities: []Capability{CapabilityExternalRead, CapabilityExternalWrite, CapabilityExternalDelete, CapabilityNetwork},
 					Execution:    []ExecutionTarget{ExecutionCloud},
 					Fields: []AppTemplateField{
-						{Key: "endpoint", Label: "Official Plane PAT MCP endpoint", Required: true, Description: PlaneHostedMCPPATURL},
+						{Key: "endpoint", Label: "Trusted Plane PAT MCP endpoint", Required: true, Description: PlaneCodeLocalMCPPATURL},
 						{Key: "workspaceSlug", Label: "Plane workspace slug", Required: true},
 						{Key: "bearerToken", Label: "Plane personal or workspace access token", Required: true, Secret: true},
 					},

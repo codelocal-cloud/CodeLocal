@@ -42,6 +42,11 @@ func TestPlaneCloudConnectionRejectsEndpointAuthAndSlugMismatch(t *testing.T) {
 			credential: cloud.PluginCloudCredential{Kind: "bearer", Endpoint: plugindomain.PlaneHostedMCPPATURL, Token: "test-token", WorkspaceSlug: "sample-team"},
 		},
 		{
+			name:       "CodeLocal Plane MCP",
+			endpoint:   plugindomain.PlaneCodeLocalMCPPATURL,
+			credential: cloud.PluginCloudCredential{Kind: "bearer", Endpoint: plugindomain.PlaneCodeLocalMCPPATURL, Token: "test-token", WorkspaceSlug: "sample-team"},
+		},
+		{
 			name:       "untrusted MCP endpoint",
 			endpoint:   "https://other.example.com/mcp",
 			credential: cloud.PluginCloudCredential{Kind: "bearer", Endpoint: "https://other.example.com/mcp", Token: "test-token", WorkspaceSlug: "sample-team"},
@@ -72,7 +77,7 @@ func TestPlaneCloudConnectionRejectsEndpointAuthAndSlugMismatch(t *testing.T) {
 			if (err != nil) != tc.wantError {
 				t.Fatalf("error=%v wantError=%v", err, tc.wantError)
 			}
-			if err == nil && (config.Endpoint != plugindomain.PlaneHostedMCPPATURL || config.WorkspaceSlug != "sample-team") {
+			if err == nil && (config.Endpoint != tc.endpoint || config.WorkspaceSlug != "sample-team") {
 				t.Fatalf("unexpected Plane MCP config: %#v", config)
 			}
 		})

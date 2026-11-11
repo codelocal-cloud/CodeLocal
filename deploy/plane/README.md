@@ -4,7 +4,7 @@
 
 **Railway:** [project `codelocal.cloud`](https://railway.com/project/d5286319-d1c5-4b51-9022-ac3211ed8f2a) → **environment `plane`**.
 
-The November 11, 2026 deployment uses Plane CE AIO `v1.4.3`, service `PlaneApp`, separate `PlaneDB` (PostgreSQL), `PlaneCache` (Redis), `PlaneQueue` (RabbitMQ) and bucket `PlaneFiles`. The pre-existing `dev` environment remains separate. `planeapp-plane.up.railway.app` is a fallback only.
+The November 11, 2026 deployment uses Plane CE AIO `v1.4.3`, service `PlaneApp`, separate `PlaneDB` (PostgreSQL), `PlaneCache` (Redis), `PlaneQueue` (RabbitMQ), **`PlaneMCP`** (PAT-only MCP gateway) and bucket `PlaneFiles`. The pre-existing `dev` environment remains separate. `planeapp-plane.up.railway.app` is a fallback only.
 
 This folder contains **operator checks and MCP onboarding**, not a fork of Plane. Never share CodeLocal's production database, Redis, secrets, or persistent volumes with Plane.
 
@@ -92,4 +92,4 @@ The earlier `codelocal-plane` test project, if still present, is a separate Plan
 
 For support and maintenance: use the `plane` environment, check `PlaneApp` deployment health, monitor database volume/storage, configure SMTP, schedule backups and test restore. Rotate admin/API credentials and review access permissions regularly.
 
-Cloud CodeLocal's fixed `mcp.plane.so` hosted plugin is **not** a connector to this instance. For self-hosted MCP use the stdio path described above until a properly protected self-hosted MCP gateway is deployed.
+CodeLocal's Plane plugin v0.3.0 supports both the vetted self-hosted `PlaneMCP` gateway (`https://planemcp-plane.up.railway.app/http/api-key/mcp`) and the Plane Cloud PAT endpoint. The gateway runs the official Plane MCP image with only the header-authenticated transport enabled (see [mcp/README.md](mcp/README.md)). Each CodeLocal account must provide its own Plane-issued PAT and workspace slug. Confirm with real authenticated tool discovery before claiming end-to-end readiness.

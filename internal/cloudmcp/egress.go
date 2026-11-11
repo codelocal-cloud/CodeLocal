@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	plugindomain "github.com/0xmarkhydra/codelocal/internal/plugins"
 )
 
 const maxResponseBytes = 4 << 20
@@ -131,7 +133,7 @@ func (t *guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		out.Header.Set("Authorization", "Bearer "+t.bearer)
 	}
 	if t.workspaceSlug != "" {
-		if req.URL.String() != "https://mcp.plane.so/http/api-key/mcp" {
+		if !plugindomain.IsPlaneMCPPATEndpoint(req.URL.String()) {
 			return nil, errors.New("Plane workspace header must not be sent to another endpoint")
 		}
 		out.Header.Set("x-workspace-slug", t.workspaceSlug)

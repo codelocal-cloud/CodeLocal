@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	plugindomain "github.com/0xmarkhydra/codelocal/internal/plugins"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -89,7 +90,7 @@ func TestHTTPRejectsRedirectCrossOriginAndLargeResponse(t *testing.T) {
 	}
 }
 
-func TestPlanePATWorkspaceHeaderOnlyAtOfficialEndpoint(t *testing.T) {
+func TestPlanePATWorkspaceHeaderOnlyAtTrustedEndpoints(t *testing.T) {
 	calls := 0
 	transport := &guardedTransport{
 		origin:        "https://mcp.plane.so",
@@ -126,6 +127,30 @@ func TestPlanePATWorkspaceHeaderOnlyAtOfficialEndpoint(t *testing.T) {
 		t.Fatalf("unexpected extra request: %d", calls)
 	}
 
+	// The CodeLocal-hosted gateway receives the same per-account headers, but
+	// never on an alternate path or through a cross-origin redirect.
+	gateway := &guardedTransport{
+		origin:        "https://planemcp-plane.up.railway.app",
+		bearer:        "secret",
+		workspaceSlug: "team-a",
+		base: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Header.Get("Authorization") != "Bearer secret" || r.Header.Get("x-workspace-slug") != "team-a" {
+				t.Fatal("CodeLocal gateway missing authenticated headers")
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+		}),
+	}
+	req, _ = http.NewRequest(http.MethodPost, plugindomain.PlaneCodeLocalMCPPATURL, nil)
+	res, err = gateway.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("CodeLocal Plane gateway rejected: %v", err)
+	}
+	res.Body.Close()
+	req, _ = http.NewRequest(http.MethodPost, "https://planemcp-plane.up.railway.app/http/mcp", nil)
+	if _, err := gateway.RoundTrip(req); err == nil {
+		t.Fatal("CodeLocal Plane gateway sent token to a different path")
+	}
+
 	other := &guardedTransport{
 		origin: "https://example.com",
 		base: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -147,7 +172,7 @@ func TestPlanePATWorkspaceHeaderOnlyAtOfficialEndpoint(t *testing.T) {
 func TestPlaneWorkspaceHeaderRequiresTrustedEndpoint(t *testing.T) {
 	manager := NewManager()
 	_, err := manager.Discover(context.Background(), "user", Config{Endpoint: "https://example.com/mcp", WorkspaceSlug: "team-a"})
-	if err == nil || !strings.Contains(err.Error(), "official PAT") {
+	if err == nil || !strings.Contains(err.Error(), "trusted Plane PAT") {
 		t.Fatalf("unexpected result: %v", err)
 	}
 	if manager.total != 0 {

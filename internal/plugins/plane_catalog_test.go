@@ -30,8 +30,16 @@ func TestPlaneIsOptInCloudPATPlugin(t *testing.T) {
 	if len(template.Execution) != 1 || template.Execution[0] != ExecutionCloud {
 		t.Fatalf("Plane cloud plugin should not claim device execution: %#v", template.Execution)
 	}
-	if len(template.Fields) != 3 || template.Fields[0].Description != PlaneHostedMCPPATURL || !template.Fields[2].Secret {
+	if len(template.Fields) != 3 || template.Fields[0].Description != PlaneCodeLocalMCPPATURL || !template.Fields[2].Secret {
 		t.Fatalf("unexpected Plane MCP endpoint: %#v", template.Fields)
+	}
+	if !IsPlaneMCPPATEndpoint(PlaneHostedMCPPATURL) || !IsPlaneMCPPATEndpoint(PlaneCodeLocalMCPPATURL) {
+		t.Fatal("trusted Plane MCP endpoints not registered")
+	}
+	for _, raw := range []string{"https://evil.example/http/api-key/mcp", "https://planemcp-plane.up.railway.app/http/mcp", "https://planemcp-plane.up.railway.app.evil.com/http/api-key/mcp", "http://planemcp-plane.up.railway.app/http/api-key/mcp"} {
+		if IsPlaneMCPPATEndpoint(raw) {
+			t.Fatalf("untrusted Plane endpoint was allowed: %s", raw)
+		}
 	}
 	if err := ValidateManifest(entry.Manifest); err != nil {
 		t.Fatalf("Plane plugin manifest is invalid: %v", err)

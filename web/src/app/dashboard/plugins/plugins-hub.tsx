@@ -82,7 +82,7 @@ function responseError(response: Response) {
         case "reauthentication_required": return "Sign in again before changing Plugin access.";
         case "plugin_not_found": return "This Plugin is no longer available.";
         case "plugin_not_installed": return "Install this Plugin before configuring a connection.";
-        case "invalid_plane_connection": return "Plane requires its official MCP endpoint and a personal access token.";
+        case "invalid_plane_connection": return "Plane requires an approved MCP endpoint and a personal access token.";
         case "invalid_plane_workspace": return "Plane workspace slug is invalid.";
         case "plane_workspace_required": return "Enter your Plane workspace slug.";
         case "plugin_install_failed": return "CodeLocal could not save the Plugin installation.";

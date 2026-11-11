@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	plugindomain "github.com/0xmarkhydra/codelocal/internal/plugins"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -76,9 +77,9 @@ func (m *Manager) open(ctx context.Context, user string, cfg Config) (*mcp.Clien
 		return nil, nil, err
 	}
 	if cfg.WorkspaceSlug != "" {
-		if endpoint != "https://mcp.plane.so/http/api-key/mcp" {
+		if !plugindomain.IsPlaneMCPPATEndpoint(endpoint) {
 			release()
-			return nil, nil, errors.New("workspace header is only supported for Plane's official PAT MCP endpoint")
+			return nil, nil, errors.New("workspace header is only supported for trusted Plane PAT MCP endpoints")
 		}
 		if !planeWorkspaceSlugRE.MatchString(cfg.WorkspaceSlug) {
 			release()
