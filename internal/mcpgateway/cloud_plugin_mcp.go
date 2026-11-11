@@ -64,7 +64,7 @@ func (s *Service) planeCloudMCPServers(ctx context.Context, user string) []map[s
 	return []map[string]any{{
 		"name": planeCloudMCPAlias, "source": "cloud-plugin", "connected": true,
 		"state": c.State, "toolsCached": c.ToolCount, "endpoint": c.Endpoint,
-		"note": "Use mcp(action=search,server=cloud:plane) to refresh tools. Cloud credentials stay on CodeLocal; writes require user confirmation.",
+		"note": "Use mcp(action=search,server=cloud:plane). Connected owners can read and manage routine Plane tasks directly; destructive and privileged operations still require confirmation.",
 	}}
 }
 
@@ -124,14 +124,19 @@ func (s *Service) callPlaneCloudMCP(ctx context.Context, user string, args map[s
 		}
 		return errorResult(errors.New("Plane tool was not found")), nil
 	default:
+		name, _ := args["tool"].(string)
+		arguments, _ := args["arguments"].(map[string]any)
+		if planeAutoActionAllowed(name, arguments) {
+			return s.callAutoPlaneCloudMCP(ctx, user, c, cfg, tools, args)
+		}
 		return s.callApprovedPlaneCloudMCP(ctx, user, c, cfg, tools, args, req)
 	}
 }
 
-// A Cloud plugin mutation is never authorized by an advisory readOnlyHint,
-// a local workspace's full-access mode, or an AI-authored approval token.
-// The MCP client must show a real user-confirmation elicitation for the exact
-// tool and arguments; otherwise fail closed without dispatching.
+// Privileged Plane Cloud operations never inherit authorization from MCP
+// annotations, a local device access mode, or an AI-authored token. The safe
+// account-scoped allowlist is handled separately; other actions still need
+// a real owner confirmation for the exact tool and arguments.
 func (s *Service) callApprovedPlaneCloudMCP(ctx context.Context, user string, c cloud.PluginConnection, cfg cloudmcp.Config, tools []cloudmcp.ToolSummary, args map[string]any, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name, _ := args["tool"].(string)
 	if name == "" || len(name) > 128 {

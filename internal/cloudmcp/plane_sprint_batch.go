@@ -34,7 +34,7 @@ type planeSprintBatchInput struct {
 
 var PlaneSprintBatchTool = ToolSummary{
 	Name:        PlaneSprintBatchToolName,
-	Description: "CodeLocal approval-only workflow: find/create a Plane sprint cycle, create up to 25 uniquely keyed work items, attach them to that cycle and read back results. The owner reviews the entire exact batch once. No automatic retries after uncertain outcomes.",
+	Description: "CodeLocal owner-scoped workflow: find/create a Plane sprint cycle, create up to 25 uniquely keyed work items, attach them to that cycle and read back results. Uses existing connected Plane credentials and read-before-create checks. No automatic retries after uncertain outcomes.",
 	InputSchema: json.RawMessage(`{
 		"type":"object","additionalProperties":false,
 		"required":["project_id","cycle_name","owned_by","items"],

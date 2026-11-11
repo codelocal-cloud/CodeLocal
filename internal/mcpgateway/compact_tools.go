@@ -452,7 +452,7 @@ func compactToolDefinitions() []compactToolDef {
 	agent := byName["agent"]
 	agent.Description += " status=needs_continuation means the objective is unfinished; use nextAction and fresh context to plan another bounded call. Only status=ready indicates verified completion. A halted result needs its reason handled before resuming."
 	cloudMCP := byName["mcp"]
-	cloudMCP.Description = "List/search/inspect/call local MCP servers and the account-scoped cloud:plane connection. Cloud Plane reuses CodeLocal's encrypted PAT; calls require explicit user confirmation."
+	cloudMCP.Description = "List/search/inspect/call local MCP servers and the account-scoped cloud:plane connection. Connected owners can automatically read and manage routine Plane tasks; destructive or privileged operations still require user approval."
 	defs := []compactToolDef{
 		workspace,
 		contextDef,

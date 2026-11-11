@@ -24,6 +24,14 @@ CodeLocal also exposes a **bounded bridge-only** `batch_create_sprint` tool unde
 
 One authenticated browser approval displays all arguments before any action. The work is then performed with the existing per-account encrypted Plane PAT; the PAT never leaves CodeLocal Cloud. If any call has an unknown outcome, the batch **stops immediately**, reports the created or existing subset and never retries a mutation automatically. Do not call the tool again until existing item IDs have been inspected. This workflow is restricted to the already-trusted Plane PAT endpoint and same authenticated owner, and it does not enable arbitrary batch tool execution.
 
+## Connected-owner direct execution (2026-11-11)
+
+The owner of an already-connected, ready Plane Cloud PAT connection can now call a **small explicit allowlist** without a second CodeLocal browser approval. This is intentional: connecting a Plane account and requesting operations from ChatGPT is the standard authorization for routine work. The following actions are allowed directly: `project` read/list; `cycle` read/list/create and **add-only** work item membership; `workitem` read/search/create and content/progress update with a restricted set of fields; `member/label/state/module` read; and the schema-validated `batch_create_sprint` workflow (at most 25 keyed work items). The caller must remain the same authenticated CodeLocal account, the origin must be the allowlisted Plane MCP PAT endpoint, and the server uses the encrypted per-user bearer without exporting it.
+
+The direct path **does not** approve `delete`, `archive`, membership removal, assignee/permission changes, project administration, or arbitrary unknown tools/actions. Those still use the owner confirmation path and one-shot approval storage. The policy is defined server-side by exact tool + action + scoped argument checks, **never** by tool descriptions, readOnly annotations, local device Full Access, or AI-supplied approval tokens. All direct calls are audited, validated against upstream tool JSON schemas, and never automatically replayed following an unknown outcome. For batch calls, partial results are returned for inspection instead of automatically retrying mutations.
+
+This change intentionally does **not** alter the local CodeLocal runtime's separate workspace access controls, device privileges, or Git/terminal safety rules.
+
 ## Definition of Done
 
 - **Bridge tests** pass and unchanged local extension routing remains compatible with previously connected clients.
