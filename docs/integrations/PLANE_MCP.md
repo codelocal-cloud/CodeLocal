@@ -23,6 +23,8 @@ Plane CE self-hosting requires more RAM and operational work than the MCP plugin
 
 Official self-host guide: https://developers.plane.so/self-hosting/methods/docker-compose
 
+**Deployment preflight and verification:** run `bash deploy/plane/doctor.sh` on a separate Docker host and follow [the CodeLocal Plane self-hosting runbook](../../deploy/plane/README.md). The runbook includes resource safeguards, official installation, authenticated API checks and a no-secret-in-Git MCP registration helper. Do not install Plane on an under-provisioned CodeLocal development machine or inside the existing CodeLocal Railway service.
+
 For a private self-hosted Plane server, use the official stdio MCP server from an **authorized** CodeLocal device. Install Python 3.10+ and `uvx` and set these variables outside the repository:
 
 - `PLANE_API_KEY`: Plane personal/workspace access token
