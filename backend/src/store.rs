@@ -200,6 +200,21 @@ impl AuthStore {
                 "beta workspace tables missing; apply 003_beta_workspaces.sql",
             ));
         }
+        let usage_ready: bool = client
+            .query_one(
+                "SELECT to_regclass('codelocal_mcp_usage') IS NOT NULL
+              AND to_regclass('codelocal_dashboard_chat_usage') IS NOT NULL
+              AND to_regclass('codelocal_beta_mcp_usage_events') IS NOT NULL",
+                &[],
+            )
+            .await
+            .map_err(|_| unavailable("beta usage schema check failed"))?
+            .get(0);
+        if !usage_ready {
+            return Err(unavailable(
+                "beta usage tables missing; apply reviewed 004_beta_usage.sql",
+            ));
+        }
         let mut conn = self
             .redis
             .get_multiplexed_async_connection()
@@ -410,6 +425,7 @@ include!("store_auth_flows.rs");
 include!("store_devices.rs");
 include!("store_workspaces.rs");
 include!("store_presence.rs");
+include!("store_usage.rs");
 
 #[cfg(test)]
 mod tests {
@@ -616,6 +632,77 @@ mod tests {
         assert_eq!(account["email"], email);
         assert_eq!(account["csrf"], token);
         assert_eq!(account["userId"], user_id);
+
+        // Real account-scoped usage: zero without events, idempotent recorded
+        // MCP invocation, and provider-reported web chat tokens. No fake data.
+        let initial_usage = store.usage_report(&user_id).await.unwrap();
+        assert_eq!(initial_usage.all_time.calls, 0);
+        assert_eq!(initial_usage.web_chat.windows.all_time.turns, 0);
+        let mcp_event_id = format!("mcp-beta-event-{suffix}");
+        let measured_mcp = McpUsageEvent {
+            event_id: &mcp_event_id,
+            user_id: &user_id,
+            device_id: "test-device",
+            workspace_id: "my-beta-workspace",
+            tool: "read",
+            calls: 1,
+            input_bytes: 400,
+            output_bytes: 240,
+            input_tokens_est: 100,
+            output_tokens_est: 60,
+            created_at: now_millis(),
+        };
+        assert!(store.record_mcp_usage(&measured_mcp).await.unwrap());
+        assert!(!store.record_mcp_usage(&measured_mcp).await.unwrap());
+        let chat_event_id = format!("chat-beta-event-{suffix}");
+        let reported_chat = ChatUsageEvent {
+            event_id: &chat_event_id,
+            user_id: &user_id,
+            thread_id: "test-thread",
+            model: "test-model",
+            protocol: "openai",
+            input_tokens: 42,
+            output_tokens: 8,
+            total_tokens: 50,
+            created_at: now_millis(),
+        };
+        assert!(store.record_chat_usage(&reported_chat).await.unwrap());
+        assert!(!store.record_chat_usage(&reported_chat).await.unwrap());
+        let usage_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/usage")
+                    .header(header::COOKIE, &combined)
+                    .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(usage_resp.status(), StatusCode::OK);
+        let usage_bytes = usage_resp.into_body().collect().await.unwrap().to_bytes();
+        let usage: serde_json::Value = serde_json::from_slice(&usage_bytes).unwrap();
+        assert_eq!(
+            usage["scope"],
+            "MCP payload only; not full AI model/provider billing tokens"
+        );
+        assert_eq!(usage["last24h"]["calls"], 1);
+        assert_eq!(usage["mcp"]["allTime"]["inputTokensEstimated"], 100);
+        assert_eq!(usage["mcp"]["allTime"]["totalTokensEstimated"], 160);
+        assert_eq!(usage["webChat"]["last1h"]["turns"], 1);
+        assert_eq!(usage["webChat"]["allTime"]["totalTokens"], 50);
+        assert_eq!(usage["webChat"]["source"], "provider_reported");
+        assert_eq!(usage["mcp"]["source"], "payload_estimated");
+        assert_eq!(
+            store
+                .usage_report("other-isolated-account")
+                .await
+                .unwrap()
+                .all_time
+                .calls,
+            0
+        );
 
         // Real-store beta device + signed-workspace persistence gates.
         let pair = store

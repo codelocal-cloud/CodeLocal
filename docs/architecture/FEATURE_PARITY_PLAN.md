@@ -41,7 +41,7 @@ All rows must reach **P** = verified integration of the preserved Next.js web wi
 | WEB-12 | Skills `/dashboard/skills` | Browse, import, publish, user enable/disable, ratings, admin evaluation/promote/rollback | `dashboard/skills`, `cloudserver/skill_routes.go` | R | UI retained; API pending |
 | WEB-13 | Plugins `/dashboard/plugins`, `/dashboard/plugins/approve/[id]` | Explore/installed, install/remove, local/cloud connections, credentials, OAuth, approval | `dashboard/plugins`, `cloudserver/plugin_routes.go` | R | UI retained; API pending |
 | WEB-14 | Penpot Design `/dashboard/design` | Embedded Penpot, SSO, workspace connection, fallback link | `dashboard/design`, `internal/penpot` | R | UI retained; API pending |
-| WEB-15 | Usage `/dashboard/usage` | MCP calls and estimated token statistics | `dashboard/usage`, `cloudserver/usage_api.go` | R | UI retained; API pending |
+| WEB-15 | Usage `/dashboard/usage` | MCP calls and estimated token statistics | `dashboard/usage`, `cloudserver/usage_api.go` | R | UI retained; Rust account-scoped Usage GET/DB source, pending new CI E2E and actual MCP/Chat producers |
 | WEB-16 | Settings `/dashboard/settings` | Runtime configuration, execution modes, secrets, decision/provider settings, navigation hub | `dashboard/settings`, `cloudserver/runtime_settings_api.go` | R | UI retained; API pending |
 | WEB-17 | Security `/dashboard/security` | Security settings, sessions, passwords, device/access controls | `dashboard/security`, `internal/webauth` | R | UI retained; API pending |
 | WEB-18 | Account `/dashboard/account` | User profile/preferences, account details, signout | `dashboard/account`, `cloudserver/account_api.go` | R | UI retained; API pending |
@@ -59,10 +59,10 @@ All rows must reach **P** = verified integration of the preserved Next.js web wi
 
 | ID | Current capability and acceptance boundary | Archived source | New owner | Priority |
 | --- | --- | --- | --- | --- |
-| CORE-01 | Authentication: signup/verification, login/logout, password reset, cookie/session/CSRF, OAuth/OIDC and reauth | `internal/webauth`, `internal/oauth` | Rust identity/auth module | P0 — Rust session/forms/OTP source implemented; DB E2E/OAuth/re-auth pending |
+| CORE-01 | Authentication: signup/verification, login/logout, password reset, cookie/session/CSRF, OAuth/OIDC and reauth | `internal/webauth`, `internal/oauth` | Rust identity/auth module | P0 — Rust session/forms/OTP source implemented; real PG/Redis login/account/logout E2E passed in CI on 49b7e12; email delivery/OAuth/re-auth pending |
 | CORE-02 | Multi-user account isolation, authorization, admin guards, rate limiting, audit | `internal/cloud`, `cloudserver`, `security` | Rust identity + policy | P0 |
 | CORE-03 | Cloud storage, PostgreSQL schema/data migrations, domain stores and transactional operations | `internal/cloud` | Rust storage/domain modules | P0 |
-| CORE-04 | Pairing handshake, device identity, signed requests, credential lifecycle and presence | `internal/deviceauth`, `cloudserver/runtime_ws.go` | Rust cloud + local runtime | P0 — pair/claim + Ed25519/Redis anti-replay WS presence+heartbeat/expiry implemented in Rust source; real-store E2E and activation/revocation queue pending |
+| CORE-04 | Pairing handshake, device identity, signed requests, credential lifecycle and presence | `internal/deviceauth`, `cloudserver/runtime_ws.go` | Rust cloud + local runtime | P0 — pair/claim, Ed25519/Redis anti-replay WS presence+heartbeat/expiry implemented; real-store pairing/workspace/lease E2E passed in CI on 49b7e12; activation/revocation queue pending |
 | CORE-05 | Account-scoped device/workspace routing, sync, reconnect, revocation | `internal/runtime`, `localclient`, `workspace` | Rust runtime transport | P0 — signed workspace metadata, foreground WS presence/reconnect and account-scoped online status implemented; secure command routing/revocation acknowledgment pending |
 | CORE-06 | Remote MCP HTTPS, OAuth, public discovery, tool schemas, error shape and stream semantics | `internal/mcpgateway`, `internal/cloudmcp` | Rust MCP gateway | P0 |
 | CORE-07 | CLI startup, login/logout/switch account, status/stop, workspace grant/ungrant/list | `cmd/codelocal` | Rust CLI | P0 — grant/list/revoke/status, signed pairing/sync/logout, local MCP stdio with one-use human review and foreground WS presence runtime implemented; service installer/stop/supervision and privileged routing pending |
@@ -78,7 +78,7 @@ All rows must reach **P** = verified integration of the preserved Next.js web wi
 | CORE-17 | Skill catalog/import/publish/rating, evaluations, promotions and rollback | `internal/skills`, `cloudserver/skill_*` | Rust skills service | P2 |
 | CORE-18 | Design/Penpot MCP and WebSocket/SSO integration | `internal/penpot`, `cloudserver/server.go` | Rust integration service | P2 |
 | CORE-19 | Blog/forum/social, media assets/shots, public author pages, email and admin | `internal/social`, `cloudserver/{blog,forum,media}*`, `mailer` | Rust content services | P2 |
-| CORE-20 | Usage metrics, model/provider and decision preferences, admin and invitations | `internal/usage`, `decision*`, `cloudserver` | Rust account/metrics | P2 |
+| CORE-20 | Usage metrics, model/provider and decision preferences, admin and invitations | `internal/usage`, `decision*`, `cloudserver` | Rust account/metrics | P2 — real PG Usage DTO/query/event dedup source added; provider/MCP producers, preferences/admin/invites pending |
 | CORE-21 | npm stable/beta releases, bundled native binaries, updater, macOS/Windows/Linux, install/uninstall and diagnostics | `cmd/release`, `internal/clientupdate`, `scripts`, `.github/workflows` | Rust CLI release pipeline | P2 |
 | CORE-22 | Health/metrics, rate limits, migrations, feature flags, WebSocket routing, deploy rollback | `internal/observability`, `featureflag`, `deploy` | Rust operations | P2 |
 

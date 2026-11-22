@@ -16,6 +16,7 @@ mod public_url;
 mod runtime;
 mod signup;
 mod store;
+mod usage;
 mod workspaces;
 
 use axum::{Json, Router, routing::get};
@@ -88,6 +89,7 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
         )
         .route("/api/client/runtime/ws", get(runtime::connect))
         .route("/api/v1/devices", get(devices::list))
+        .route("/api/v1/usage", get(usage::report))
         .route("/api/v1/workspaces", get(workspaces::catalog))
         .route(
             "/api/client/workspaces/sync",
