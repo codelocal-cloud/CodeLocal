@@ -21,9 +21,10 @@ Available in isolated Rust beta:
   codelocal login|pair               Start beta device pairing via browser approval
   codelocal login --force            Re-pair and replace saved beta credential
   codelocal sync                     Sync signed workspace metadata to beta cloud
+  codelocal logout                   Signed beta credential revoke + local sign-out
 
 Not yet migrated from Go (will fail explicitly):
-  codelocal logout|switch-account
+  codelocal switch-account
   codelocal setup|doctor|agent|approvals|mcp
   codelocal stop|reset|uninstall
   codelocal                          Start local device runtime
@@ -95,10 +96,11 @@ fn run(args: &[String]) -> Result<(), String> {
             Ok(())
         }
         "sync" if args.len() == 1 => codelocal::pair::sync(),
+        "logout" if args.len() == 1 => codelocal::pair::logout(),
         "login" | "pair" if args.len() == 1 => codelocal::pair::login(false),
         "login" | "pair" if args.len() == 2 && args[1] == "--force" => codelocal::pair::login(true),
         "" => Err("CodeLocal Rust device runtime is not implemented yet; run --help for available beta commands".into()),
-        "logout" | "signout" | "switch-account" | "switch" |
+        "signout" | "switch-account" | "switch" |
         "setup" | "doctor" | "agent" | "approvals" | "mcp" | "stop" | "reset" | "uninstall" => {
             Err(format!("{command}: not implemented in Rust beta; the production Go CLI remains authoritative"))
         }

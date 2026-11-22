@@ -413,14 +413,19 @@ fn canonical_device_request(
     .into_bytes()
 }
 
-/// Push only beta workspace IDs/names, never machine filesystem paths.
-pub fn sync() -> Result<(), String> {
-    let registry = Registry::beta_default().map_err(|e| e.to_string())?;
-    let origin = beta_url()?;
-    let c =
-        load_credential(registry.state_dir())?.ok_or("no paired beta device; run login first")?;
-    if c.server_url != origin {
-        return Err("saved credential belongs to another beta API".into());
+fn signed_post(
+    c: &Credential,
+    origin: &str,
+    path: &str,
+    payload: Vec<u8>,
+) -> Result<reqwest::blocking::Response, String> {
+    if c.server_url != origin
+        || !matches!(
+            path,
+            "/api/client/workspaces/sync" | "/api/client/auth/logout"
+        )
+    {
+        return Err("refusing signed request to unknown beta origin/path".into());
     }
     let seed_raw = URL_SAFE_NO_PAD
         .decode(&c.device_private_key)
@@ -431,6 +436,38 @@ pub fn sync() -> Result<(), String> {
     let signing_key = SigningKey::from_bytes(&seed);
     if URL_SAFE_NO_PAD.encode(signing_key.verifying_key().as_bytes()) != c.device_public_key {
         return Err("beta public/private signing keys do not match".into());
+    }
+    let mut nonce_bytes = [0u8; 18];
+    getrandom::fill(&mut nonce_bytes).map_err(|_| "secure nonce generation failed")?;
+    let nonce = URL_SAFE_NO_PAD.encode(nonce_bytes);
+    let timestamp = now_millis() / 1000;
+    let canonical = canonical_device_request("POST", path, timestamp, &nonce, &payload);
+    let signature = URL_SAFE_NO_PAD.encode(signing_key.sign(&canonical).to_bytes());
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|_| "unable to initialize beta HTTP client")?;
+    client
+        .post(format!("{origin}{path}"))
+        .header("Content-Type", "application/json")
+        .header("X-CodeLocal-Credential-Id", &c.credential_id)
+        .header("Authorization", format!("Device {}", c.credential_secret))
+        .header("X-CodeLocal-Signature-Timestamp", timestamp.to_string())
+        .header("X-CodeLocal-Signature-Nonce", nonce)
+        .header("X-CodeLocal-Signature", signature)
+        .body(payload)
+        .send()
+        .map_err(|_| "signed beta request could not reach server".into())
+}
+
+/// Push only beta workspace IDs/names, never machine filesystem paths.
+pub fn sync() -> Result<(), String> {
+    let registry = Registry::beta_default().map_err(|e| e.to_string())?;
+    let origin = beta_url()?;
+    let c =
+        load_credential(registry.state_dir())?.ok_or("no paired beta device; run login first")?;
+    if c.server_url != origin {
+        return Err("saved credential belongs to another beta API".into());
     }
     let workspaces = registry.list().map_err(|e| e.to_string())?;
     if workspaces.len() > 100 {
@@ -453,27 +490,7 @@ pub fn sync() -> Result<(), String> {
     }))
     .map_err(|_| "could not serialize beta workspaces")?;
     const PATH: &str = "/api/client/workspaces/sync";
-    let mut nonce_bytes = [0u8; 18];
-    getrandom::fill(&mut nonce_bytes).map_err(|_| "secure nonce generation failed")?;
-    let nonce = URL_SAFE_NO_PAD.encode(nonce_bytes);
-    let timestamp = now_millis() / 1000;
-    let canonical = canonical_device_request("POST", PATH, timestamp, &nonce, &payload);
-    let signature = URL_SAFE_NO_PAD.encode(signing_key.sign(&canonical).to_bytes());
-    let client = Client::builder()
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|_| "unable to initialize beta HTTP client")?;
-    let resp = client
-        .post(format!("{origin}{PATH}"))
-        .header("Content-Type", "application/json")
-        .header("X-CodeLocal-Credential-Id", &c.credential_id)
-        .header("Authorization", format!("Device {}", c.credential_secret))
-        .header("X-CodeLocal-Signature-Timestamp", timestamp.to_string())
-        .header("X-CodeLocal-Signature-Nonce", nonce)
-        .header("X-CodeLocal-Signature", signature)
-        .body(payload)
-        .send()
-        .map_err(|_| "beta workspace sync could not reach server")?;
+    let resp = signed_post(&c, &origin, PATH, payload)?;
     if !resp.status().is_success() {
         return Err(format!(
             "signed beta workspace sync failed ({})",
@@ -491,6 +508,43 @@ pub fn sync() -> Result<(), String> {
         workspaces.len()
     );
     println!("Cloud metadata only; runtime execution remains disabled.");
+    Ok(())
+}
+
+/// Explicitly revoke a beta device in the Cloud before forgetting its local
+/// credential. Network failures leave the credential unchanged.
+pub fn logout() -> Result<(), String> {
+    let registry = Registry::beta_default().map_err(|e| e.to_string())?;
+    let dir = registry.state_dir().to_owned();
+    let _held_lock = lock(&dir)?;
+    let c = load_credential(&dir)?.ok_or("no beta device credential found; nothing to revoke")?;
+    let origin = beta_url()?;
+    if origin != c.server_url {
+        return Err("saved credential belongs to another beta API".into());
+    }
+    let resp = signed_post(&c, &origin, "/api/client/auth/logout", b"{}".to_vec())?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "beta server did not confirm credential revocation ({}); local credential retained",
+            resp.status()
+        ));
+    }
+    let result: serde_json::Value = resp
+        .json()
+        .map_err(|_| "invalid logout acknowledgement; local credential retained")?;
+    if result["ok"] != true || result["revoked"] != true {
+        return Err("beta server did not confirm revocation; local credential retained".into());
+    }
+    let target = dir.join("credential.json");
+    check_not_symlink(&target)?;
+    fs::remove_file(&target)
+        .map_err(|e| format!("remote credential revoked, but local removal failed: {e}"))?;
+    #[cfg(unix)]
+    File::open(&dir)
+        .and_then(|file| file.sync_all())
+        .map_err(|e| format!("remote credential revoked; fsync failed: {e}"))?;
+    println!("Beta device credential revoked and local credential cleared.");
+    println!("Local workspace grants were not deleted.");
     Ok(())
 }
 

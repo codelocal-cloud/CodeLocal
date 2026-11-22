@@ -7,7 +7,7 @@ This `beta` branch preserves the exact CodeLocal Next.js 16 / React 19 frontend 
 | Component | Result |
 | --- | --- |
 | `web/` | Original 52 Next.js page routes and UI preserved; full web check/build passes |
-| `cli/` | Rust beta registry + interactive Ed25519 device pairing (`login`) + manually signed workspace metadata sync (`sync`); no remote host execution |
+| `cli/` | Rust beta registry + Ed25519 device pairing (`login`), signed workspace metadata sync (`sync`) and signed credential revocation (`logout`); no remote host execution |
 | `backend/` | Rust beta auth/session/OTP/password reset, device pairing and revocation, signed Ed25519 workspace sync with Redis anti-replay, and account-scoped workspace catalog. **Real-store end-to-end testing pending** |
 | `backend/src/device_signing.rs` | Go-compatible Ed25519 verifier now enforced for workspace metadata sync, with Redis nonce replay protection; no privileged file/terminal/MCP endpoint |
 | `backend/compose.beta.yml` | Isolated loopback PostgreSQL+Redis test stack (Docker daemon must be running) |
@@ -45,6 +45,7 @@ CODELOCAL_BETA_API_URL=http://127.0.0.1:8080 cargo run -p codelocal -- login
 cargo run -p codelocal -- status
 cargo run -p codelocal -- grant ./cli
 cargo run -p codelocal -- sync  # signed metadata only; no paths or remote host execution
+# When testing is finished: cargo run -p codelocal -- logout
 ```
 
 A fresh Compose PostgreSQL volume executes `001_beta_auth.sql`, `002_beta_devices.sql`, and `003_beta_workspaces.sql` in order. Existing volumes do not automatically replay migrations. This is an **isolated local-only subset** of Go migrations and must never be applied to the existing production database. The beta auth store refuses non-loopback database hosts and databases not named with `beta`.

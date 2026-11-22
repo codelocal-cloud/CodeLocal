@@ -71,7 +71,7 @@ fn presented_credential(headers: &HeaderMap) -> Option<(&str, &str)> {
     Some((id, secret))
 }
 
-async fn authorize_signed_device(
+pub(crate) async fn authorize_signed_device(
     store: &AuthStore,
     headers: &HeaderMap,
     uri: &Uri,

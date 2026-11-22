@@ -6,6 +6,7 @@ mod auth;
 mod auth_session;
 mod devices;
 // Verify request signatures before adding privileged native-runtime routes.
+mod device_logout;
 pub mod device_signing;
 mod mailer;
 mod pair;
@@ -89,6 +90,10 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
         .route(
             "/api/client/workspaces/sync",
             axum::routing::post(workspaces::sync),
+        )
+        .route(
+            "/api/client/auth/logout",
+            axum::routing::post(device_logout::logout),
         )
         .route(
             "/api/v1/devices/{device_id}/revoke",
