@@ -2,7 +2,7 @@
 
 ## Implemented
 
-The existing `codelocal mcp` stdio process now **fails closed by default** for the three file-access MCP tools: `codelocal_local_info`, `codelocal_local_read`, `codelocal_local_search`. `codelocal_workspace_list` remains a metadata-only tool returning workspace IDs and names (not local paths).
+The existing `codelocal mcp` stdio process now **fails closed by default** for the file-access MCP tools: `codelocal_local_info`, `codelocal_local_read`, `codelocal_local_search`, and (since Phase 11) `codelocal_local_read_many`. `codelocal_workspace_list` remains a metadata-only tool returning workspace IDs and names (not local paths).
 
 1. The AI client calls `tools/call` with an exact tool name and arguments, including a currently granted `workspaceId`.
 2. Instead of reading content immediately, Rust returns an MCP text result with `status:approval_required`, `executionStarted:false`, an unpredictable `approvalId` and expiry time.

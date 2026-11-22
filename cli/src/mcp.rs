@@ -24,6 +24,13 @@ struct ReadInput {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReadManyInput {
+    workspace_id: String,
+    paths: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SearchInput {
     workspace_id: String,
     query: String,
@@ -60,6 +67,19 @@ fn catalog() -> Value {
                     "endLine":{"type":"integer","minimum":1}
                 },
                 "required":["workspaceId","path"],"additionalProperties":false
+            },
+            "annotations":{"readOnlyHint":true}
+        },
+        {
+            "name":"codelocal_local_read_many",
+            "description":"Read up to 20 granted local files in one bounded operation, after one exact human approval (2 MiB/file and 8 MiB total)",
+            "inputSchema":{
+                "type":"object",
+                "properties":{
+                    "workspaceId":{"type":"string"},
+                    "paths":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":20}
+                },
+                "required":["workspaceId","paths"],"additionalProperties":false
             },
             "annotations":{"readOnlyHint":true}
         },
@@ -125,6 +145,17 @@ fn call(name: &str, arguments: Value, registry: &Registry) -> Result<Value, Stri
                 )
                 .map_err(|_| "could not serialize local read".into())
             }
+        }
+        "codelocal_local_read_many" => {
+            let input: ReadManyInput =
+                serde_json::from_value(arguments).map_err(|_| "invalid read_many arguments")?;
+            if input.paths.is_empty() {
+                return Err("read_many requires at least one path".into());
+            }
+            let reader = LocalReader::from_registry(registry, &input.workspace_id)
+                .map_err(|error| error.to_string())?;
+            serde_json::to_value(reader.many(&input.paths).map_err(|e| e.to_string())?)
+                .map_err(|_| "could not serialize batch read".into())
         }
         "codelocal_local_search" => {
             let input: SearchInput =
@@ -220,7 +251,10 @@ fn gated_call(
     }
     if !matches!(
         name,
-        "codelocal_local_info" | "codelocal_local_read" | "codelocal_local_search"
+        "codelocal_local_info"
+            | "codelocal_local_read"
+            | "codelocal_local_read_many"
+            | "codelocal_local_search"
     ) {
         return Err("unknown or disabled local MCP tool".into());
     }
@@ -307,6 +341,7 @@ mod tests {
         let project = temp.path().join("project");
         fs::create_dir_all(&project).unwrap();
         fs::write(project.join("main.rs"), "hello source\n").unwrap();
+        fs::write(project.join("readme.md"), "beta docs\n").unwrap();
         fs::write(project.join(".env"), "TOKEN=hidden\n").unwrap();
         let registry = Registry::new(temp.path().join("beta-state"));
         let grant = registry.grant(project).unwrap();
@@ -325,7 +360,7 @@ mod tests {
             .iter()
             .map(|v| v["name"].as_str().unwrap())
             .collect::<Vec<_>>();
-        assert_eq!(names.len(), 4);
+        assert_eq!(names.len(), 5);
         assert!(
             !names
                 .iter()
@@ -433,6 +468,72 @@ mod tests {
         .unwrap();
         assert_eq!(denied["result"]["isError"], true);
         assert!(!denied.to_string().contains("hello source"));
+    }
+
+    #[test]
+    fn batch_read_requires_one_exact_approval_and_blocks_sensitive_mixed_paths() {
+        let (_temp, registry, id) = setup();
+        let tools = dispatch(
+            &json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}),
+            &registry,
+        )
+        .unwrap();
+        assert!(
+            tools["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|tool| tool["name"] == "codelocal_local_read_many")
+        );
+        let args = json!({"workspaceId":id,"paths":["main.rs","readme.md"]});
+        let req = |approval: Option<&str>| {
+            let mut params = json!({"name":"codelocal_local_read_many","arguments":args});
+            if let Some(value) = approval {
+                params["approvalId"] = Value::String(value.to_owned());
+            }
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":params})
+        };
+        let pending = dispatch(&req(None), &registry).unwrap();
+        let details: Value =
+            serde_json::from_str(pending["result"]["content"][0]["text"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(details["status"], "approval_required");
+        assert!(!pending.to_string().contains("hello source"));
+        let ticket = details["approvalId"].as_str().unwrap();
+        let approvals = ApprovalStore::new(registry.state_dir());
+        assert!(approvals.decide(ticket, true).unwrap());
+        let approved = dispatch(&req(Some(ticket)), &registry).unwrap();
+        assert_eq!(approved["result"]["isError"], false);
+        assert!(approved.to_string().contains("hello source"));
+        assert!(approved.to_string().contains("beta docs"));
+        let replay = dispatch(&req(Some(ticket)), &registry).unwrap();
+        assert_eq!(replay["result"]["isError"], true);
+
+        let sensitive_args = json!({"workspaceId":id,"paths":["main.rs",".env"]});
+        let pending_bad = dispatch(
+            &json!({"jsonrpc":"2.0","id":3,"method":"tools/call",
+            "params":{"name":"codelocal_local_read_many","arguments":sensitive_args}}),
+            &registry,
+        )
+        .unwrap();
+        let info: Value = serde_json::from_str(
+            pending_bad["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        let bad_ticket = info["approvalId"].as_str().unwrap();
+        assert!(approvals.decide(bad_ticket, true).unwrap());
+        let denied = dispatch(
+            &json!({"jsonrpc":"2.0","id":4,"method":"tools/call",
+            "params":{"name":"codelocal_local_read_many",
+                "approvalId":bad_ticket,
+                "arguments":sensitive_args}}),
+            &registry,
+        )
+        .unwrap();
+        assert_eq!(denied["result"]["isError"], true);
+        assert!(!denied.to_string().contains("TOKEN=hidden"));
     }
 
     #[test]

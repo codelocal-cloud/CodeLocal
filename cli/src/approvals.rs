@@ -281,7 +281,10 @@ impl ApprovalStore {
         }
         if !matches!(
             tool,
-            "codelocal_local_info" | "codelocal_local_read" | "codelocal_local_search"
+            "codelocal_local_info"
+                | "codelocal_local_read"
+                | "codelocal_local_search"
+                | "codelocal_local_read_many"
         ) {
             return Err("unknown or unapprovable MCP tool".into());
         }
