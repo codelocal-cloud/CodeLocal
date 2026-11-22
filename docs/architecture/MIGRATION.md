@@ -1,82 +1,68 @@
-# CodeLocal beta — migration architecture and acceptance gates
+# CodeLocal beta — Rust backend and local client migration, preserving Next.js
 
-## Mandate
+## Approved direction (2026-11-22)
 
-Rebuild the **entire CodeLocal application**: Go backend/CLI/runtime to Rust,
-and the frontend into a fresh Next.js + React + TypeScript App Router project.
-Do not copy old business logic unreviewed or silently leave Go serving
-production routes. Preserve `old-project/` solely for contract extraction,
-tests, security comparisons and rollback. Do not deploy it as part of beta.
+**Do not rewrite the frontend.** Retain `web/` from `main` commit `365d372` with its existing routes, components, responsive layout, forms, navigation and Next.js App Router configuration. Only change frontend code if required for a demonstrated backend compatibility issue. Preserve external API contracts so frontend changes are minimal.
 
-## Target boundaries
+Rewrite the following **in Rust**:
+
+1. Cloud/server: identity, API, persistence, OAuth/OIDC, MCP gateway, device/workspace routing, usage, plugin/skill/content services.
+2. Local client/runtime: CLI, device login/pairing, persistent agent, filesystem, Git, guarded terminal, local MCP hub, browser/computer orchestration.
+3. System integrations: DB migrations, WebSocket transports, permissions, OS-native bridges and cross-platform releases.
+
+The full old source, including the original web app, remains in `old-project/` for reference and rollback. Do not serve or ship old Go code from `beta`. Continue operating `main` in its existing deployment until cutover is explicitly approved.
+
+## Architecture and security authorities
 
 ```text
-AI clients (ChatGPT / Codex / Claude)
-     ↕ MCP HTTPS / OAuth
-Rust Cloud API + MCP Gateway (backend/)
-     ↕ authenticated transport
-Rust Device / Local Agent (cli/ + future crates/)
-     ↕ explicit user authorization & approvals
-Local projects / Git / terminal / LSP / tools
-     ↕ only permitted, redacted intelligence
-Project Brain / persistent state / services
-     ↕ HTTPS
-Next.js Control Plane (web/)
+ChatGPT / Codex / Claude / other MCP clients
+          ↕ HTTPS OAuth + MCP (contract preserved)
+Rust Cloud API & MCP Gateway (backend/)
+          ↕ signed/authenticated device transport
+Rust CLI + local native runtime (cli/ + future crates/)
+          ↕ explicit workspace access and approvals
+Local Git, files, processes, LSP, browser/computer bridges
+
+Existing Next.js web/ (preserved)
+          ↕ same-origin /api/v1/* and mutations
+Rust Cloud API (source of truth for auth, data, policy)
 ```
 
-Rust implementation decisions: Tokio runtime, Axum HTTP API, strict
-typed contracts, parameterized database access, explicit authorization
-boundaries. Postgres/Redis/storage, queues and WebSocket transport must be
-designed from observed legacy contracts before dependencies are finalized.
+Next.js owns presentation, not authorization, sessions or business rules. Preserve the public URL namespace, status codes, DTOs, cookie/CSRF semantics, OAuth and MCP tool definitions. Existing `web/next.config.ts` proxies `/api/v1/*` and marked mutations to `CODELOCAL_BACKEND_URL`. In beta, point this env var to the Rust API. **Most routes are not yet implemented**, so runtime E2E is expected to fail until the corresponding Rust module is ported.
 
-Next.js is a separate frontend consuming Rust-backed APIs; backend
-authorization is mandatory for all sensitive operations. Do not
-reimplement enforcement in React alone.
+Security gates: tenant isolation, credential redaction, PKCE, session rotation, CSRF/rate limits, device ownership, workspace path/symlink confinement, non-bypassable approvals, audit and explicit revocation. Do not falsely describe guarded host-shell policy as OS sandboxing.
 
-## Three migration cases
+## Three cases (BA)
 
-1. **Infrastructure/bootstrap (now).** Archive old tracked source and
-   create independent Rust workspace + Next.js. Provide health/status
-   endpoints and dev/build basics. Zero legacy production functionality
-   is claimed.
-2. **Parity migration.** Extract exact API/MCP/DB/session/CLI contracts
-   from old-project; implement Rust equivalents with tests, compatibility
-   adapters where necessary, data migrations and traceable coverage.
-3. **Cutover.** Deploy isolated beta services and test multi-device
-   workflows end-to-end. Compare against main, gate security, run data
-   migrations with rollback, then enable controlled traffic only after
-   acceptance.
+- **A — selected: keep existing UI; rebuild backend and local client.** Use unchanged Next components, route tree and user flows; implement Rust behind matching contracts.
+- **B — deferred: targeted frontend bug fixes.** After backend parity, address proven breakages without changing information architecture.
+- **C — deferred: UI/product redesign.** Separate future design proposal, with explicit approval.
 
-## Modules and minimum acceptance requirements
+## Execution waves
 
-| Domain | Required acceptance checks |
-| --- | --- |
-| Identity + auth | OAuth, sessions, tokens, CSRF, same-site, replay resistance |
-| Cloud + tenancy | account isolation, RBAC, rate limits, validation |
-| MCP gateway | discovery, request/response compatibility, streaming/errors |
-| Local runtime | encrypted pairing, connect/reconnect, device ownership |
-| Workspace/files | authorization, symlink escapes, binary/secret denial |
-| Git/terminal | user approvals, command policy, audit and cancellation |
-| Project Brain | persistence, LSP indexes, memory and knowledge parity |
-| Computer/browser | permissions, device isolation, bounded controls |
-| Extensions/plugins | discovery, invocation ACL, explicit approvals |
-| Frontend | new design system, accessibility, responsive UI, page parity |
-| CLI/releases | install/update/uninstall, cross-platform binary releases |
-| Operations | observability, schema migration, zero-downtime rollback |
+| Wave | Concrete implementation | Gate |
+| --- | --- | --- |
+| 0 (now) | Restore `web/` byte-for-byte from `main`, capture 52 Next page routes, API/MCP/CLI baseline and CI checks | `git diff main -- web` empty; `npm run check --prefix web` |
+| 1 | Rust persistence, identity, signup/login/verify/reset, sessions, CSRF, OAuth/OIDC, account scope | Existing login/authorize forms work with real Rust; negative security tests |
+| 2 | Rust device registration/pairing, signed local transport, presence, workspaces, CLI grant/list/status | Existing Devices/Projects pages and CLI communicate with Rust |
+| 3 | Rust `/mcp`, 14 compact tool schemas/actions, local runtime filesystem/Git/terminal/process/approval | Existing ChatGPT/Codex/Claude connections pass compatibility tests |
+| 4 | Rust Project Brain, code graph/LSP, context, skills, agents, browser/computer, extension hub/Plugins | Real execution, durable evidence and security regression |
+| 5 | Rust chat/streaming/providers, media/shots, blog/forum/social, admin, usage, Penpot/SSO, settings | Full existing Next.js feature journeys against Rust |
+| 6 | npm/native client release, Rust cloud staging, DB migration dry-run, reliability/performance, canary and rollback | E2E parity, cross-platform verification, explicit go/no-go |
 
-## Rules
+**Implementation order is driven by dependencies:** auth before private APIs; pairing before remote local execution; permission framework before file/terminal/browser actions. Preserve user data with explicit schema transformations and verified rollback; never commit secrets/production snapshots.
 
-- Keep `main` and live production deployments unchanged.
-- Rust API routes are additive only until equivalent tests prove parity.
-- Do not migrate customer plaintext, secrets or production data by copying
-  local environment files into Git.
-- Require green `cargo fmt --check`, `cargo test`, `cargo clippy`,
-  Next.js lint/typecheck/build and API contract tests before promotion.
-- A green health endpoint is **not** proof that identity, MCP or devices work.
-- Document missing parity openly; no silent stubs that claim success.
+## Per-feature definition of done
 
-## Current milestone
+- Current Next UI and routes still render with authentic data; no synthetic success or fake telemetry.
+- Rust endpoints exactly satisfy the old request/response/error/pagination/streaming contract or an explicit compatibility adapter exists.
+- Authorization/security tests include malicious and cross-account requests, CSRF rejection, bad pairing, revoked devices, path escape, unsafe command approvals.
+- CLI commands, version/help and exit semantics match current release where applicable; MCP names, schemas and tool errors are compatible.
+- Web lint/typecheck/UI tests/build, Rust fmt/test/clippy, integration/E2E and deploy rollback are green.
+- Matrix in `FEATURE_PARITY_PLAN.md` links each source feature with actual tests and implementation evidence.
 
-**Bootstrap started:** Git source archived; Rust HTTP and CLI entrypoints,
-Next.js shell and API connection status created. Product-specific endpoints,
-storage and all security-sensitive functionality are still pending.
+## Current status
+
+- Preserved the existing `web/` source (52 page routes) from `main` on `beta`.
+- New Rust backend has only health/bootstrap status routes and the Rust CLI is a starter. **Business functionality is not migrated yet.**
+- Live `main` and production remain untouched. Do not push/deploy until separately requested.

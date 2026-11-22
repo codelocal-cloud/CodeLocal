@@ -1,15 +1,13 @@
 # CodeLocal beta repository instructions
 
-User-approved migration target: **Rust backend + native Rust CLI/runtime,
-Next.js + React + TypeScript frontend**. The previous project is archived
-under `old-project/` and is read-only reference material.
+**Approved direction (2026-11-22): preserve the existing Next.js frontend and rebuild the Go backend/CLI/local runtime in Rust.**
 
-Do not add production features to `old-project/`.
-Do not deploy the beta bootstrap to production.
-Preserve API, OAuth/MCP, authorization, data, workspace and device security
-contracts during phased implementation. Never bypass approval or tenant
-boundaries to make a feature work.
+- `web/` is copied from `main` commit `365d372`. Treat its route tree, existing components, UI/UX, DTOs and user flows as **frozen parity contracts**, not a blank-slate design canvas. Avoid visual/UX redesign.
+- `backend/` owns Rust cloud/server/API/OAuth/MCP/domain logic; `cli/` and future Rust crates own local runtime, CLI, controlled execution and OS bridges.
+- `old-project/` is a read-only historical source snapshot to extract behavior, schema, tests and security contracts. Never deploy it or add production changes to it.
+- Maintain current `/api/v1/*`, `/api/collective/*`, auth and consent POST, `/mcp`, `/client` and session/cookie/CSRF semantics. Do not weaken authorization or approval gates.
+- Use real Rust implementations and state; never pretend new endpoints are production-ready with mocks or fake telemetry.
+- For `web/`, run `npm run check --prefix web`; for Rust run fmt/test/clippy and targeted security/contract tests. For real parity, also run E2E against beta Rust services.
+- Keep `main` and current production deployments unchanged until an approved cutover.
 
-All new work belongs to `backend/`, `cli/`, `web/`, `docs/` or dedicated
-Rust crates in the Cargo workspace. Each module requires tests, contracts,
-and an explicit migration acceptance gate before replacing its Go equivalent.
+See `docs/architecture/MIGRATION.md` and `docs/architecture/FEATURE_PARITY_PLAN.md`.

@@ -1,0 +1,174 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
+
+// Exercise the component's effects with controlled network completion, without a browser or credentials.
+const source = readFileSync(new URL("./penpot-design-frame.tsx", import.meta.url), "utf8");
+const code = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+const refs = [];
+const effects = [];
+const listeners = new Map();
+const exports = {};
+let refIndex = 0;
+let calls = [];
+let inFlight = 0;
+let peak = 0;
+let hold;
+let responseStatus = 200;
+let responseState = "ready";
+let tokenRequests = [];
+let requestInterval;
+let iframeOnLoad;
+let timer;
+const items = Array.from({ length: 29 }, (_, i) => ({
+  deviceId: "device", workspaceId: `workspace-${i}`, status: "active", runtimeOnline: true,
+}));
+items.push({ deviceId: "offline", workspaceId: "offline", status: "offline", runtimeOnline: false });
+runInNewContext(code, {
+  exports, URL, AbortController,
+  window: {
+    addEventListener: (event, listener) => listeners.set(event, listener),
+    removeEventListener: (event) => listeners.delete(event),
+    setTimeout: (fn, delay) => { timer = { fn, delay }; return 1; },
+    clearTimeout: () => { timer = undefined; },
+    setInterval: (fn, delay) => { requestInterval = { fn, delay }; return 2; },
+    clearInterval: () => { requestInterval = undefined; },
+  },
+  fetch: async (_, options) => {
+    calls.push(options);
+    peak = Math.max(peak, ++inFlight);
+    try {
+      if (hold) await new Promise((resolve) => { hold = resolve; });
+      return { ok: responseStatus === 200, status: responseStatus,
+        headers: { get: () => "600" }, json: async () => ({ ok: true, connection: { state: responseState } }) };
+    } finally {
+      inFlight--;
+    }
+  },
+  require: (name) => {
+    if (name === "react") return {
+      useRef: (initial) => refs[refIndex++] ?? (refs[refIndex - 1] = { current: initial }),
+      useState: () => [0, () => {}],
+      useMemo: (fn) => fn(),
+      useCallback: (fn) => fn,
+      useEffect: (fn) => effects.push(fn),
+    };
+    if (name === "react/jsx-runtime") return { jsx: (kind, props) => { if (kind === "iframe") iframeOnLoad = props.onLoad; return props; } };
+    if (name === "@/lib/i18n/provider") return {
+      useTranslations: () => ({ t: (message) => message }),
+    };
+    if (name === "../use-dashboard-resource") return {
+      useDashboardResource: (url) => ({
+        state: { kind: "ready", value: url.endsWith("/account") ? { csrf: "test-csrf" } : { items } },
+        retry: () => {},
+      }),
+    };
+    return { default: {} };
+  },
+});
+function render() {
+  refIndex = 0;
+  effects.length = 0;
+  exports.PenpotDesignFrame({ designUrl: "https://design.codelocal.cloud/" });
+  return effects.map((effect) => effect());
+}
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+let cleanups = render();
+const frame = { postMessage: (data, origin) => tokenRequests.push({ data, origin }) };
+refs[0].current = { contentWindow: frame };
+iframeOnLoad();
+assert.equal(tokenRequests.length, 1, "iframe load requests missing Penpot token");
+assert.equal(tokenRequests[0].origin, "https://design.codelocal.cloud");
+assert.equal(tokenRequests[0].data.type, "codelocal:penpot-mcp-token-request");
+assert.equal(requestInterval.delay, 5000);
+const message = (token, origin = "https://design.codelocal.cloud", source = frame) =>
+  listeners.get("message")({ origin, source, data: { type: "codelocal:penpot-mcp-token", token } });
+message("test-account-token-A", "https://untrusted.example");
+message("test-account-token-A", "https://design.codelocal.cloud", {});
+assert.equal(refs[1].current, "");
+message("test-account-token-A");
+cleanups.forEach((cleanup) => cleanup?.());
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "Cloud and workspaces beyond index 10 receive credentials");
+assert.equal(JSON.parse(calls[0].body).executionTarget, "cloud");
+assert.equal(JSON.parse(calls[0].body).deviceId, "");
+assert.equal(peak, 1, "connections are sequential");
+assert.ok(calls.every((call) => call.headers["X-CSRF-Token"] === "test-csrf"));
+
+message("test-account-token-B");
+cleanups.forEach((cleanup) => cleanup?.());
+calls = [];
+hold = true;
+cleanups = render();
+assert.equal(calls.length, 1);
+message("test-account-token-C");
+hold();
+hold = undefined;
+await flush();
+assert.equal(calls.length, 1, "old-token queue stops after rotation");
+assert.equal(refs[2].current.size, 0, "old-token success cannot mark new-token connection ready");
+cleanups.forEach((cleanup) => cleanup?.());
+cleanups = render();
+await flush();
+assert.equal(calls.length, 31);
+assert.ok(calls.slice(1).every((call) => JSON.parse(call.body).bearerToken === "test-account-token-C"));
+message("test-account-token-D");
+cleanups.forEach((cleanup) => cleanup?.());
+responseStatus = 429;
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 1, "rate limit stops remaining requests");
+assert.ok(timer.delay >= 599000 && timer.delay <= 600000, "Retry-After respected");
+cleanups.forEach((cleanup) => cleanup?.());
+cleanups = render();
+await flush();
+assert.equal(calls.length, 1, "focus rerender cannot bypass cooldown");
+refs[3].current = 0;
+responseStatus = 200;
+cleanups.forEach((cleanup) => cleanup?.());
+cleanups = render();
+await flush();
+assert.equal(calls.length, 31, "queue resumes after cooldown");
+cleanups.forEach((cleanup) => cleanup?.());
+assert.equal(timer, undefined, "unmount cancels retry");
+
+cleanups = render();
+message("test-account-token-E");
+cleanups.forEach((cleanup) => cleanup?.());
+responseStatus = 502;
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "transient first-time failures attempt all workspaces");
+assert.ok(timer?.delay >= 4900 && timer?.delay <= 5000, "transient failures schedule an automatic retry");
+cleanups.forEach((cleanup) => cleanup?.());
+refs[3].current = 0;
+responseStatus = 200;
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "transient failures retry without requiring user focus");
+cleanups.forEach((cleanup) => cleanup?.());
+assert.equal(timer, undefined, "successful retry cancels further retries");
+cleanups = render();
+message("test-account-token-F");
+cleanups.forEach((cleanup) => cleanup?.());
+responseState = "configured";
+calls = [];
+cleanups = render();
+await flush();
+assert.equal(calls.length, 30, "HTTP 200 configured must not count as ready");
+assert.ok(timer, "non-ready response retries");
+cleanups.forEach((cleanup) => cleanup?.());
+refs[3].current = 0;
+responseState = "ready";
+cleanups = render();
+await flush();
+assert.equal(calls.length, 60, "non-ready connection reattempted");
+cleanups.forEach((cleanup) => cleanup?.());
+console.log("PASS: Penpot iframe handshake, 29 workspaces, origin/source, CSRF, rate-limit and retries");

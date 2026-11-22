@@ -1,0 +1,187 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isAccountResource } from "@/lib/contracts/account";
+import { isWorkspacesResource } from "@/lib/contracts/resources";
+import { useDashboardResource } from "../use-dashboard-resource";
+import styles from "./design.module.css";
+import { useTranslations } from "@/lib/i18n/provider";
+
+const PENPOT_TOKEN_MESSAGE = "codelocal:penpot-mcp-token";
+const PENPOT_TOKEN_REQUEST = "codelocal:penpot-mcp-token-request";
+
+type PenpotTokenMessage = {
+  type: typeof PENPOT_TOKEN_MESSAGE;
+  token: string;
+};
+
+function isPenpotTokenMessage(value: unknown): value is PenpotTokenMessage {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return record.type === PENPOT_TOKEN_MESSAGE &&
+    typeof record.token === "string" &&
+    record.token.trim().length >= 20 &&
+    record.token.length <= 8192 &&
+    !/[\r\n\0]/.test(record.token);
+}
+
+export function PenpotDesignFrame({ designUrl }: { designUrl: string }) {
+  const { t } = useTranslations();
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const tokenRef = useRef("");
+  const connectedRef = useRef(new Set<string>());
+  const retryAtRef = useRef(0);
+  const retryDelayRef = useRef(5000);
+  const [tokenRevision, setTokenRevision] = useState(0);
+  const account = useDashboardResource("/api/v1/account", isAccountResource);
+  const workspaces = useDashboardResource("/api/v1/workspaces", isWorkspacesResource);
+  const designOrigin = useMemo(() => {
+    try {
+      return new URL(designUrl).origin;
+    } catch {
+      return "";
+    }
+  }, [designUrl]);
+
+  const requestPenpotToken = useCallback(() => {
+    if (!designOrigin || tokenRef.current) return;
+    frameRef.current?.contentWindow?.postMessage({ type: PENPOT_TOKEN_REQUEST }, designOrigin);
+  }, [designOrigin]);
+
+  useEffect(() => {
+    window.addEventListener("focus", workspaces.retry);
+    return () => window.removeEventListener("focus", workspaces.retry);
+  }, [workspaces.retry]);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (!designOrigin || event.origin !== designOrigin) return;
+      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isPenpotTokenMessage(event.data)) return;
+      const token = event.data.token.trim();
+      if (token === tokenRef.current) return;
+      tokenRef.current = token;
+      connectedRef.current.clear();
+      retryAtRef.current = 0;
+      retryDelayRef.current = 5000;
+      setTokenRevision((value) => value + 1);
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [designOrigin]);
+
+  useEffect(() => {
+    // If the first message arrived before React mounted, ask the iframe to resend.
+    const onFocus = () => requestPenpotToken();
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(onFocus, 5000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+  }, [requestPenpotToken]);
+
+  useEffect(() => {
+    const token = tokenRef.current;
+    if (!token || account.state.kind !== "ready" || workspaces.state.kind !== "ready") return;
+
+    const csrf = account.state.value.csrf;
+    const targets = [{ deviceId: "cloud", workspaceId: "cloud", runtimeOnline: true, status: "active" }, ...workspaces.state.value.items
+      .filter((workspace) => workspace.runtimeOnline && workspace.status !== "offline")];
+    if (!targets.length) return;
+
+    const controller = new AbortController();
+    let retryTimer: number | undefined;
+    function retryLater() {
+      retryTimer = window.setTimeout(() => setTokenRevision((value) => value + 1),
+        Math.max(1000, retryAtRef.current - Date.now()));
+    }
+    async function connectWorkspaces() {
+      if (retryAtRef.current > Date.now()) {
+        retryLater();
+        return;
+      }
+      let failed = false;
+      // Bound concurrency, not coverage: later workspaces need credentials too.
+      for (const workspace of targets) {
+        if (controller.signal.aborted || token !== tokenRef.current) return;
+        const key = `${workspace.deviceId}:${workspace.workspaceId}`;
+        if (connectedRef.current.has(key)) continue;
+        try {
+          const response = await fetch("/api/v1/plugins/penpot/connections", {
+            method: "POST",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+              "X-CSRF-Token": csrf,
+            },
+            body: JSON.stringify({
+              deviceId: workspace.deviceId === "cloud" ? "" : workspace.deviceId,
+              workspaceId: workspace.deviceId === "cloud" ? "" : workspace.workspaceId,
+              executionTarget: workspace.deviceId === "cloud" ? "cloud" : "local",
+              endpoint: `${designOrigin}/mcp/stream`,
+              bearerToken: token,
+            }),
+            signal: controller.signal,
+          });
+          if (response.status === 401 || response.status === 403) return;
+          if (controller.signal.aborted || token !== tokenRef.current) return;
+          if (response.status === 429) {
+            const header = response.headers.get("Retry-After") ?? "";
+            const seconds = Number(header);
+            const until = header.trim() && Number.isFinite(seconds)
+              ? Date.now() + Math.max(1, seconds) * 1000 : Date.parse(header);
+            retryAtRef.current = Number.isFinite(until) ? until : Date.now() + 600_000;
+            retryLater();
+            return;
+          }
+          if (response.ok) {
+            // An HTTP 200 may mean "configured" even when MCP discovery failed.
+            // Only a verified ready connection may skip future retries.
+            const body = await response.json().catch(() => null);
+            if (controller.signal.aborted || token !== tokenRef.current) return;
+            if (body?.ok === true && body?.connection?.state === "ready") {
+              connectedRef.current.add(key);
+            } else {
+              failed = true;
+            }
+          } else {
+            failed = true;
+          }
+        } catch {
+          if (controller.signal.aborted) return;
+          failed = true;
+        }
+      }
+      if (failed && !controller.signal.aborted && token === tokenRef.current) {
+        // Runtime settings may still be syncing when a user connects for the first time.
+        retryAtRef.current = Date.now() + retryDelayRef.current;
+        retryDelayRef.current = Math.min(retryDelayRef.current * 2, 60_000);
+        retryLater();
+      } else if (!failed) {
+        retryDelayRef.current = 5000;
+      }
+    }
+    void connectWorkspaces();
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(retryTimer);
+    };
+  }, [account.state, designOrigin, tokenRevision, workspaces.state]);
+
+  return (
+    <iframe
+      ref={frameRef}
+      onLoad={requestPenpotToken}
+      allow="clipboard-read; clipboard-write"
+      className={styles.designFrame}
+      referrerPolicy="strict-origin-when-cross-origin"
+      src={designUrl}
+      title={t("CodeLocal Penpot Design Workspace")}
+    />
+  );
+}

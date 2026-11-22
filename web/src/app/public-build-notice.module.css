@@ -1,0 +1,126 @@
+.dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-width: 620px;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  color: var(--text);
+  background: transparent;
+  box-shadow: var(--shadow-stage);
+}
+
+.dialog::backdrop {
+  background: rgba(2, 5, 6, 0.76);
+  backdrop-filter: blur(10px);
+}
+
+.card {
+  position: relative;
+  overflow: hidden;
+  padding: 30px;
+  background: radial-gradient(circle at 100% 0%, rgba(182, 243, 211, 0.12), transparent 36%), var(--glass-fill-strong);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.7;
+}
+
+.eyebrow {
+  margin-bottom: 12px;
+  color: var(--accent);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.card h2 {
+  margin: 0 0 16px;
+  font-size: clamp(24px, 4vw, 34px);
+  font-weight: 580;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.card p {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.primary,
+.secondary,
+.close {
+  min-height: 46px;
+  border-radius: 8px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.primary {
+  color: #102219;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.primary:hover { background: #d2ffe6; }
+
+.secondary {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line-strong);
+}
+
+.secondary:hover { background: rgba(255, 255, 255, 0.07); }
+
+.close {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 10px;
+  padding-block: 9px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 620px) {
+  .dialog {
+    width: calc(100vw - 20px);
+    border-radius: 12px;
+  }
+
+  .card { padding: 22px 18px 18px; }
+  .actions { grid-template-columns: 1fr; gap: 10px; }
+}

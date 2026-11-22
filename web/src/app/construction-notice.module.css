@@ -1,0 +1,111 @@
+.dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+
+.dialog::backdrop {
+  background: rgba(2, 6, 12, 0.74);
+  backdrop-filter: blur(8px);
+}
+
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 18px;
+  padding: 26px;
+  border: 1px solid rgba(118, 197, 255, 0.22);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(52, 171, 255, 0.14), transparent 34%),
+    linear-gradient(145deg, #0b1420 0%, #070c13 100%);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(75, 198, 255, 0.45);
+  border-radius: 16px;
+  background: rgba(26, 129, 190, 0.16);
+  color: #67d9ff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.copy { min-width: 0; }
+
+.eyebrow {
+  margin: 1px 0 7px;
+  color: #65d7ff;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.copy h2 {
+  margin: 0;
+  color: #f7fbff;
+  font-size: 21px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.copy p {
+  margin: 11px 0 0;
+  color: #aebdca;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.button {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 40px;
+  margin-top: 2px;
+  padding: 0 17px;
+  border: 1px solid rgba(94, 215, 255, 0.36);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(29, 157, 224, 0.2), rgba(75, 82, 235, 0.18));
+  color: #eaf8ff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.button:hover {
+  border-color: rgba(103, 220, 255, 0.62);
+  background: linear-gradient(135deg, rgba(31, 172, 239, 0.28), rgba(90, 92, 246, 0.24));
+}
+
+.button:focus-visible {
+  outline: 2px solid #66dfff;
+  outline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .card {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 14px;
+    padding: 21px;
+  }
+
+  .icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+  }
+
+  .copy h2 { font-size: 19px; }
+}

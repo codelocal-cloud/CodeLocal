@@ -1,43 +1,43 @@
-# CodeLocal beta — Rust + Next.js rebuild
+# CodeLocal beta — keep Next.js, rewrite backend and local client in Rust
 
-This is a **clean-slate replacement** for the old Go/TypeScript CodeLocal codebase.
+This branch `beta` starts from `main` commit `365d372`. **The existing Next.js web product is preserved**, not redesigned. Our migration replaces the Go Cloud/backend, MCP gateway, CLI and machine runtime with Rust **behind the current web/API contracts**.
 
-- `backend/` — native Rust API service (Axum + Tokio).
-- `cli/` — native Rust CLI entrypoint (bootstrap only).
-- `web/` — brand-new Next.js App Router interface.
-- `old-project/` — archived source snapshot of the original Git-tracked repository, kept for contract reference and rollback.
-- `docs/` — architecture, migration checklist, and compatibility gates.
-- `migration/` — repeatable archive procedure.
+| Directory | Ownership | Status |
+| --- | --- | --- |
+| `web/` | Existing CodeLocal Next.js 16 / React 19 product, copied unchanged from `main` | Source preserved; needs Rust backend |
+| `backend/` | New Rust Axum/Tokio cloud API/MCP backend | Bootstrap only |
+| `cli/` | New Rust CLI and future native machine runtime | Bootstrap only |
+| `old-project/` | Frozen complete Go+web source from `main`, for compatibility, security and migration reference | Archive only; never deploy |
+| `docs/architecture/` | Parity inventory, contract requirements and phased migration | Active plan |
 
-**Important:** This is a bootstrap, **not a production-ready replacement**.
-The Rust code does not yet implement login, OAuth, MCP, tool execution,
-Project Brain, database persistence, device pairing or billing. The old
-production environment must continue using its existing deploy until
-migration acceptance gates pass.
+**Not production-ready.** Existing Next.js screens make requests against the historical API contract; almost all of those endpoints are **not yet implemented** in Rust. A successful Next.js build or Rust health check does **not** mean login, Chat, Devices, MCP, Project Brain or other features work.
 
-## Run locally
-
-Rust API:
+## Local development
 
 ```sh
+# Terminal 1: Rust backend
 cargo run -p codelocal-backend
 # GET http://127.0.0.1:8080/healthz
 # GET http://127.0.0.1:8080/api/v1/system/status
-```
 
-Frontend:
-
-```sh
+# Terminal 2: existing Next.js product
 cd web
-npm install
-npm run dev
-# http://localhost:3000
-```
+npm ci
+CODELOCAL_BACKEND_URL=http://127.0.0.1:8080 npm run dev
 
-Rust CLI:
-
-```sh
+# Terminal 3: Rust CLI bootstrap
 cargo run -p codelocal -- --version
 ```
 
-See `docs/architecture/MIGRATION.md` before implementing production behavior.
+`CODELOCAL_BACKEND_URL` is the **server-only** destination used by the existing Next.js proxy. The Rust backend will implement the existing `/api/v1/*` and authentication contracts incrementally. Do not put private credentials into `NEXT_PUBLIC_*` variables.
+
+## Gates
+
+- Rust: `cargo fmt --all -- --check`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`
+- Existing web: `npm run check --prefix web` (lint, TypeScript, UI tests and production build)
+- Security and compatibility: OAuth/PKCE, cookie/CSRF, tenant and workspace boundaries, device pairing, local approvals, MCP tool schemas and error/streaming parity.
+- Before deployment: real backend E2E, migration dry-run, multiple devices/AI clients, releases and rollback testing.
+
+**Policy:** Keep `main`/production untouched; do not claim a feature is migrated until there is a real Rust implementation with test evidence.
+
+See [Migration architecture](docs/architecture/MIGRATION.md) and [Feature inventory and plan](docs/architecture/FEATURE_PARITY_PLAN.md).
