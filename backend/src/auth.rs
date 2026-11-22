@@ -12,9 +12,12 @@ use serde_json::json;
 const CSRF_COOKIE: &str = "codelocal_csrf";
 const SESSION_TTL_SECONDS: u32 = 30 * 24 * 60 * 60;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AuthConfig {
     pub secure_cookies: bool,
+    pub store: Option<std::sync::Arc<crate::store::AuthStore>>,
+    pub binding_secret: Option<String>,
+    pub admin_emails: Vec<String>,
 }
 
 impl AuthConfig {
@@ -27,6 +30,14 @@ impl AuthConfig {
             .any(|url| url.trim().starts_with("https://"));
         Self {
             secure_cookies: production || https_origin,
+            store: None,
+            binding_secret: std::env::var("CODELOCAL_BETA_SECURITY_BINDING_SECRET").ok(),
+            admin_emails: std::env::var("CODELOCAL_BETA_ADMIN_EMAILS")
+                .unwrap_or_default()
+                .split(',')
+                .map(|email| email.trim().to_lowercase())
+                .filter(|email| !email.is_empty())
+                .collect(),
         }
     }
 }
@@ -115,6 +126,9 @@ mod tests {
         }
         router_with_auth(AuthConfig {
             secure_cookies: secure,
+            store: None,
+            binding_secret: None,
+            admin_emails: vec![],
         })
         .oneshot(request.body(Body::empty()).unwrap())
         .await

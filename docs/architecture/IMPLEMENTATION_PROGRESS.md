@@ -42,4 +42,26 @@ Current milestone: **started P0 migration**, not full feature parity.
 5. Implement restricted local file operations, approvals, Git, terminal and other public MCP actions with security negative tests.
 6. Run E2E on separate beta Cloud/database and at least two clients/devices before any migration of old local state or cutover.
 
-**Do not interpret the 13 passing tests as feature parity.** Only two narrowly scoped existing capabilities have initial implementation.
+**Historical Phase 1 note:** 13 passing tests covered only CSRF and local workspace registry. More scoped Rust auth code follows below; it does not establish complete feature parity.
+
+## Phase 2 — Rust beta authentication data plane (2026-11-22)
+
+**Implemented source, not yet production-ready and not yet end-to-end validated against running PostgreSQL + Redis:**
+
+- `backend/src/store.rs` — explicit opt-in, isolated PostgreSQL user repository matching Go's `codelocal_users` fields, Redis session JSON with `securityVersion`, revoke, 30-day TTL, atomic 12-attempt/10-minute account throttle. Authenticated state is prefixed `codelocal:beta:session:*` and cannot read Go production sessions.
+- `backend/migrations/001_beta_auth.sql` — reviewed manual PostgreSQL bootstrap for **beta-only** user and audit tables, using Go-compatible column names. Startup checks existing table columns and does not run migrations or create users silently.
+- `backend/src/password.rs` — Go-compatible scrypt verification (`N=16384,r=8,p=1,64 bytes`) with constant-time comparison; cross-language deterministic golden fixture.
+- `backend/src/auth_session.rs` — `POST /login`, `GET /api/v1/account`, `POST /logout`; uses real beta stores only, pre-auth cookie/Form CSRF equality, session-bound logout CSRF, unguessable session tokens, same-origin redirects, device/agent binding, security-version checks, credential redaction and no fake authenticated responses.
+- `backend/src/main.rs` starts the API with a verified optional beta store; unconfigured and partial-store setups fail closed. Only localhost PostgreSQL/Redis URLs are permitted until verified TLS support is added, and database names must contain `beta`.
+- `backend/src/store.rs` contains an **explicitly ignored** real-store integration test that seeds/removes a temporary user, performs CSRF→login→account→logout and verifies session revocation. Run only with separate local beta PG/Redis services provisioned.
+- No Next.js UI source or production Go data modified.
+
+### Explicit limits / unresolved gates
+
+1. Live PostgreSQL and Redis integration test has **not** been executed on connected Mac because a vetted disposable DB/Redis stack is not running/provisioned for this task.
+2. Auth still lacks email signup/OTP, password reset, OAuth, public proxy cookie/security integration, per-IP rate limits and verified network-prefix binding. Account throttle and device/agent hashes exist, but **security parity is incomplete**.
+3. Existing Go Redis sessions are intentionally not shared in beta. Production cookie/session and credential migration require a separate compatibility and security gate.
+4. Admin email selection uses explicit `CODELOCAL_BETA_ADMIN_EMAILS` (no automatic privileged default); full RBAC/tenancy and session risk handling still require review.
+5. Rust API does not yet claim general backend readiness. Do not deploy beta to a public endpoint or put beta auth behind a production domain.
+
+Next: fully isolated Postgres/Redis E2E; signup verification + scrypt-compatible password reset; audited OAuth/PKCE and device pairing; remaining 14 MCP tools with permission boundaries.

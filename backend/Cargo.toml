@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["form"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio = { version = "1", features = ["full"] }
@@ -13,6 +13,15 @@ tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 getrandom = "0.4"
 base64 = "0.22"
+sha2 = "0.10"
+hex = "0.4"
+subtle = "2.6"
+scrypt = "0.11"
+tokio-postgres = "0.7"
+deadpool-postgres = "0.14"
+redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
+form_urlencoded = "1.2"
+url = "2.5"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

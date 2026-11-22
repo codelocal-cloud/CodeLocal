@@ -3,6 +3,9 @@
 //! their authorization and protocol contracts are implemented and tested.
 
 mod auth;
+mod auth_session;
+mod password;
+mod store;
 
 use axum::{Json, Router, routing::get};
 use serde::{Deserialize, Serialize};
@@ -34,11 +37,22 @@ pub fn router() -> Router {
     router_with_auth(auth::AuthConfig::from_env())
 }
 
+/// Stateful auth is enabled only with explicit isolated beta PostgreSQL/Redis settings.
+pub async fn live_router() -> Result<Router, Box<dyn std::error::Error>> {
+    let mut config = auth::AuthConfig::from_env();
+    config.store = store::AuthStore::from_beta_env().await?;
+    Ok(router_with_auth(config))
+}
+
 pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/system/status", get(status))
         .route("/api/v1/auth/csrf", get(auth::csrf))
+        .route("/api/v1/account", get(auth_session::account))
+        .route("/login", axum::routing::post(auth_session::login))
+        .route("/logout", axum::routing::post(auth_session::logout))
+        .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
         .with_state(config)
 }
 

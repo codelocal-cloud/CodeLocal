@@ -1,6 +1,6 @@
 use std::{env, net::SocketAddr};
 
-use codelocal_backend::router;
+use codelocal_backend::live_router;
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -19,6 +19,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address: SocketAddr = format!("{host}:{port}").parse()?;
     let listener = TcpListener::bind(address).await?;
     tracing::info!(address = %listener.local_addr()?, "CodeLocal beta API listening");
-    axum::serve(listener, router()).await?;
+    axum::serve(listener, live_router().await?).await?;
     Ok(())
 }
