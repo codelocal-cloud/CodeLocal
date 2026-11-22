@@ -5,6 +5,7 @@ on:
     branches: [beta]
   pull_request:
     branches: [beta]
+  workflow_dispatch:
 
 jobs:
   rust:
@@ -17,6 +18,61 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+  rust-beta-integration:
+    name: Rust beta isolated PostgreSQL / Redis E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: codelocal_beta
+          POSTGRES_USER: codelocal_beta
+          POSTGRES_PASSWORD: beta_ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U codelocal_beta -d codelocal_beta"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      # Disposable runner-only services. Never use real or production credentials.
+      CODELOCAL_BETA_DATABASE_URL: postgres://codelocal_beta:beta_ci_only_password@127.0.0.1:5432/codelocal_beta
+      CODELOCAL_BETA_REDIS_URL: redis://127.0.0.1:6379/0
+      CODELOCAL_BETA_SECURITY_BINDING_SECRET: beta-ci-local-test-binding-secret-32bytes-plus
+      CODELOCAL_BETA_PUBLIC_BASE_URL: http://127.0.0.1:3100
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install PostgreSQL command-line client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - name: Initialize isolated beta schema
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: codelocal_beta
+          PGPASSWORD: beta_ci_only_password
+          PGDATABASE: codelocal_beta
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/001_beta_auth.sql
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/002_beta_devices.sql
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/003_beta_workspaces.sql
+      - name: Auth → pairing → workspace → nonce/revocation E2E
+        run: cargo test -p codelocal-backend isolated_beta_login_account_logout_real_stores -- --ignored --nocapture
+
   web:
     runs-on: ubuntu-latest
     defaults:
