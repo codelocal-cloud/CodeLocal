@@ -4,7 +4,7 @@
 
 - `codelocal local-search-files <workspace-id> <query> [maxResults]`: searches workspace-relative filenames and returns `matches`, `truncated`, `scannedEntries`, `includeIgnored=false`.
 - `codelocal local-search-text <workspace-id> <fixed-string> [maxResults]`: fixed UTF-8 substring search (no regex/shell) returning Go-style `relative/path:line:column:text` matches, `truncated` and scan metrics.
-- Traversal uses the Rust `ignore` crate with `.gitignore`, `.ignore`, git excludes and Git global ignores; hidden, portable `.codelocal/rules` and `skills` remain eligible unless ignored.
+- Traversal uses the Rust `ignore` crate with `.gitignore`, `.ignore`, git excludes and Git global ignores; hidden, portable `.codelocal/rules` and `skills` remain eligible unless ignored. File-name traversal is sorted deterministically so bounded results have the same order on APFS and ext4.
 - Security is mandatory: workspace grant identity, sensitive-path exclusions, no directory symlinks, file opens through the existing `openat/O_NOFOLLOW` boundary, and no Cloud upload or remote execution.
 - Caps: 10,000 visited entries; depth 24; 200 results; 2 MiB/file; 64 MiB aggregate text scan. Results are intentionally **fixed-string only** and `includeIgnored=true` is not supported in this phase. A result set can be truncated by caps.
 

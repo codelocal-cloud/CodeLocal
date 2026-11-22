@@ -164,6 +164,8 @@ impl LocalReader {
             .max_depth(Some(MAX_WALK_DEPTH))
             .hidden(false) // portable .codelocal rules remain visible
             .follow_links(false)
+            // Deterministic order across APFS/ext4, including truncated pages.
+            .sort_by_file_name(|a, b| a.cmp(b))
             .git_ignore(true)
             .git_exclude(true)
             .git_global(true)
