@@ -28,7 +28,7 @@ cargo build -p codelocal
 ./target/debug/codelocal mcp
 ```
 
-The MCP client is responsible for spawning the process with access to the same `CODELOCAL_BETA_STATE_DIR` as the grant operation. Connect **only a locally trusted AI client**. A connected local client can read granted workspace source (subject to security exclusions); the beta process does not independently prompt for each read.
+The MCP client is responsible for spawning the process with access to the same `CODELOCAL_BETA_STATE_DIR` as the grant operation. Connect **only a locally trusted AI client**. **Phase 10 now requires a human CLI approval for each source read/search and binds approval to one exact invocation; see `PHASE10_LOCAL_MCP_APPROVALS.md`.**
 
 ## Verification
 

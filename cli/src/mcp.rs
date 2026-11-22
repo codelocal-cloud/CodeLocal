@@ -1,7 +1,11 @@
 //! Local-only MCP JSON-RPC stdio server for Rust beta.
 //! No network listener, remote execution, terminal, editing, or cloud access.
 //! All filesystem tools require a user-granted beta workspace.
-use crate::{localfs::LocalReader, workspace::Registry};
+use crate::{
+    approvals::{ApprovalStore, Decision, fresh_session},
+    localfs::LocalReader,
+    workspace::Registry,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -150,7 +154,12 @@ fn call(name: &str, arguments: Value, registry: &Registry) -> Result<Value, Stri
 
 /// Notifications have no ID and produce no response. Tools never bypass beta
 /// workspace grants. Unknown JSON-RPC methods are rejected.
-pub fn dispatch(request: &Value, registry: &Registry) -> Option<Value> {
+pub fn dispatch_with_approvals(
+    request: &Value,
+    registry: &Registry,
+    approvals: &ApprovalStore,
+    session: &str,
+) -> Option<Value> {
     let id = request.get("id")?.clone();
     if request.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
         return Some(rpc_error(id, -32600, "invalid JSON-RPC version"));
@@ -165,7 +174,7 @@ pub fn dispatch(request: &Value, registry: &Registry) -> Option<Value> {
                 "protocolVersion":PROTOCOL_VERSION,
                 "serverInfo":{"name":"codelocal-rust-beta-stdio","version":env!("CARGO_PKG_VERSION")},
                 "capabilities":{"tools":{"listChanged":false}},
-                "instructions":"Local-only read/search of granted beta workspaces; no remote execution."
+                "instructions":"Local-only, human-approved one-use read/search of granted beta workspaces; no remote execution."
             }),
         ),
         "ping" => rpc_result(id, json!({})),
@@ -179,14 +188,79 @@ pub fn dispatch(request: &Value, registry: &Registry) -> Option<Value> {
                 .and_then(|p| p.get("arguments"))
                 .cloned()
                 .unwrap_or_else(|| json!({}));
-            rpc_result(id, tool_reply(call(name, args, registry)))
+            let approval_id = params
+                .and_then(|p| p.get("approvalId"))
+                .and_then(Value::as_str);
+            rpc_result(
+                id,
+                tool_reply(gated_call(
+                    name,
+                    args,
+                    registry,
+                    approvals,
+                    session,
+                    approval_id,
+                )),
+            )
         }
         _ => rpc_error(id, -32601, "unknown method"),
     })
 }
 
+fn gated_call(
+    name: &str,
+    args: Value,
+    registry: &Registry,
+    approvals: &ApprovalStore,
+    session: &str,
+    approval_id: Option<&str>,
+) -> Result<Value, String> {
+    if name == "codelocal_workspace_list" {
+        return call(name, args, registry);
+    }
+    if !matches!(
+        name,
+        "codelocal_local_info" | "codelocal_local_read" | "codelocal_local_search"
+    ) {
+        return Err("unknown or disabled local MCP tool".into());
+    }
+    let workspace_id = args
+        .get("workspaceId")
+        .and_then(Value::as_str)
+        .ok_or("a granted workspaceId is required")?;
+    // Verify the exact current grant BEFORE creating any approval. A revoked
+    // grant cannot be restored by a previously approved ticket.
+    let granted = registry
+        .list()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .any(|workspace| workspace.workspace_id == workspace_id);
+    if !granted {
+        return Err("workspace not currently granted in Rust beta".into());
+    }
+    match approvals.check_or_queue(session, name, &args, approval_id, workspace_id)? {
+        Decision::Allowed => call(name, args, registry),
+        Decision::Pending { id, expires_at } => Ok(json!({
+            "status":"approval_required",
+            "executionStarted":false,
+            "approvalId":id,
+            "expiresAt":expires_at,
+            "message":"Review the exact request with codelocal approvals; approve or deny its ID. Retry this same tool call with params.approvalId."
+        })),
+        Decision::Denied => Err("approval was denied, expired or already consumed".into()),
+    }
+}
+
+#[cfg(test)]
+fn dispatch(request: &Value, registry: &Registry) -> Option<Value> {
+    let approvals = ApprovalStore::new(registry.state_dir());
+    dispatch_with_approvals(request, registry, &approvals, &"a".repeat(32))
+}
+
 pub fn serve_stdio() -> Result<(), String> {
     let registry = Registry::beta_default().map_err(|e| e.to_string())?;
+    let approvals = ApprovalStore::new(registry.state_dir());
+    let session = fresh_session()?;
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut input = BufReader::new(stdin.lock());
@@ -210,7 +284,7 @@ pub fn serve_stdio() -> Result<(), String> {
                 continue;
             }
         };
-        if let Some(response) = dispatch(&request, &registry) {
+        if let Some(response) = dispatch_with_approvals(&request, &registry, &approvals, &session) {
             output_line(&mut output, &response)?;
         }
     }
@@ -278,19 +352,89 @@ mod tests {
         let good = dispatch(&json!({"jsonrpc":"2.0","id":2,"method":"tools/call",
             "params":{"name":"codelocal_local_read","arguments":{"workspaceId":id,"path":"main.rs"}}}),&r).unwrap();
         assert_eq!(good["result"]["isError"], false);
-        assert!(good.to_string().contains("hello source"));
+        assert!(!good.to_string().contains("hello source"));
+        let pending: Value =
+            serde_json::from_str(good["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(pending["status"], "approval_required");
+        assert_eq!(pending["executionStarted"], false);
+        let ticket_id = pending["approvalId"].as_str().unwrap();
+        let approvals = ApprovalStore::new(r.state_dir());
+        assert_eq!(approvals.list().unwrap().len(), 1);
+        assert!(approvals.decide(ticket_id, true).unwrap());
+        let read = dispatch(
+            &json!({"jsonrpc":"2.0","id":22,"method":"tools/call",
+            "params":{"name":"codelocal_local_read",
+                "approvalId":ticket_id,
+                "arguments":{"workspaceId":id,"path":"main.rs"}}}),
+            &r,
+        )
+        .unwrap();
+        assert_eq!(read["result"]["isError"], false);
+        assert!(read.to_string().contains("hello source"));
+        let replay = dispatch(
+            &json!({"jsonrpc":"2.0","id":23,"method":"tools/call",
+            "params":{"name":"codelocal_local_read",
+                "approvalId":ticket_id,
+                "arguments":{"workspaceId":id,"path":"main.rs"}}}),
+            &r,
+        )
+        .unwrap();
+        assert_eq!(replay["result"]["isError"], true);
+        assert!(!replay.to_string().contains("hello source"));
         let secret = dispatch(
             &json!({"jsonrpc":"2.0","id":3,"method":"tools/call",
             "params":{"name":"codelocal_local_read","arguments":{"workspaceId":id,"path":".env"}}}),
             &r,
         )
         .unwrap();
-        assert_eq!(secret["result"]["isError"], true);
+        let secret_pending: Value =
+            serde_json::from_str(secret["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(secret_pending["status"], "approval_required");
         assert!(!secret.to_string().contains("TOKEN=hidden"));
+        let secret_ticket = secret_pending["approvalId"].as_str().unwrap();
+        assert!(approvals.decide(secret_ticket, true).unwrap());
+        let secret_after_approval = dispatch(
+            &json!({"jsonrpc":"2.0","id":31,"method":"tools/call",
+            "params":{"name":"codelocal_local_read",
+              "approvalId":secret_ticket,
+              "arguments":{"workspaceId":id,"path":".env"}}}),
+            &r,
+        )
+        .unwrap();
+        assert_eq!(secret_after_approval["result"]["isError"], true);
+        assert!(!secret_after_approval.to_string().contains("TOKEN=hidden"));
         let unknown = dispatch(&json!({"jsonrpc":"2.0","id":4,"method":"tools/call",
             "params":{"name":"codelocal_local_read","arguments":{"workspaceId":"ungranted","path":"main.rs"}}}),&r).unwrap();
         assert_eq!(unknown["result"]["isError"], true);
     }
+    #[test]
+    fn revoked_grant_invalidates_approved_ticket() {
+        let (_temp, registry, id) = setup();
+        let pending = dispatch(
+            &json!({"jsonrpc":"2.0","id":5,"method":"tools/call",
+            "params":{"name":"codelocal_local_info",
+                "arguments":{"workspaceId":id,"path":"main.rs"}}}),
+            &registry,
+        )
+        .unwrap();
+        let details: Value =
+            serde_json::from_str(pending["result"]["content"][0]["text"].as_str().unwrap())
+                .unwrap();
+        let ticket = details["approvalId"].as_str().unwrap();
+        let approvals = ApprovalStore::new(registry.state_dir());
+        assert!(approvals.decide(ticket, true).unwrap());
+        assert!(registry.revoke(&id).unwrap());
+        let denied = dispatch(
+            &json!({"jsonrpc":"2.0","id":6,"method":"tools/call",
+            "params":{"name":"codelocal_local_info", "approvalId":ticket,
+                "arguments":{"workspaceId":id,"path":"main.rs"}}}),
+            &registry,
+        )
+        .unwrap();
+        assert_eq!(denied["result"]["isError"], true);
+        assert!(!denied.to_string().contains("hello source"));
+    }
+
     #[test]
     fn invalid_method_cannot_execute_terminal_and_stdout_is_framed() {
         let (_temp, r, _) = setup();

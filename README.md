@@ -7,7 +7,7 @@ This `beta` branch preserves the exact CodeLocal Next.js 16 / React 19 frontend 
 | Component | Result |
 | --- | --- |
 | `web/` | Original 52 Next.js page routes and UI preserved; full web check/build passes |
-| `cli/` | Rust beta registry, Ed25519 pairing, signed workspace sync/logout, bounded local file read/search/edit, read-only MCP stdio (4 tools) and foreground signed WebSocket device presence; no remote host execution |
+| `cli/` | Rust beta registry, Ed25519 pairing, signed workspace sync/logout, bounded local file read/search/edit, human-approved, one-use local MCP stdio read/search (4 tools) and foreground signed WebSocket device presence; no remote host execution |
 | `backend/` | Rust beta auth/session/OTP/password reset, device pairing/revocation, signed workspace sync, and WebSocket device presence (Redis TTL + revocation checks). Account-scoped Devices/Workspaces dashboards use presence data. **Real-store end-to-end testing pending** |
 | `backend/src/device_signing.rs` | Go-compatible Ed25519 verifier and one-time Redis nonce now gate workspace sync and runtime WebSocket upgrade; no privileged file/terminal/MCP endpoint |
 | `backend/compose.beta.yml` | Isolated loopback PostgreSQL+Redis test stack (Docker daemon must be running) |
@@ -50,8 +50,12 @@ cargo run -p codelocal -- local-search-files <workspace-id> '.rs' 20
 cargo run -p codelocal -- local-search-text <workspace-id> 'LocalReader' 20
 # Use the file's SHA-256 from local-info before making a local-only edit:
 cargo run -p codelocal -- local-edit <workspace-id> src/lib.rs <expected-sha256> 'old text' 'new text'
-# Start read-only MCP stdio locally (AI client sends JSON-RPC over stdin/stdout):
+# Start read-only MCP stdio; file reads/search now REQUIRE human approval:
 cargo run -p codelocal -- mcp
+# In another terminal, review exact request/tool/arguments before granting it once:
+cargo run -p codelocal -- approvals
+cargo run -p codelocal -- approvals approve <approval-id>
+# Or reject: cargo run -p codelocal -- approvals deny <approval-id>
 cargo run -p codelocal -- sync  # signed metadata only; no paths or remote host execution
 cargo run -p codelocal -- runtime --once # one signed WebSocket registration check
 cargo run -p codelocal -- runtime        # foreground presence + heartbeat; Ctrl+C to stop
@@ -81,4 +85,4 @@ Device pairing still does not enable privileged local operations. Signed request
 
 ## Release safety
 
-Do not modify or deploy the frozen Go archive. Do not merge into `main`, deploy to Railway, publish npm CLI, migrate existing credentials, or use production database snapshots until the full compatibility and security gates pass. Consult [feature parity plan](docs/architecture/FEATURE_PARITY_PLAN.md), [architecture](docs/architecture/MIGRATION.md), [Phase 1–2 progress](docs/architecture/IMPLEMENTATION_PROGRESS.md) and [Phase 3 auth/devices report](docs/architecture/PHASE3_AUTH_DEVICES.md) and [Phase 4 signed workspaces](docs/architecture/PHASE4_SIGNED_WORKSPACES.md) and [Phase 5 local file reads](docs/architecture/PHASE5_LOCAL_READ.md) and [Phase 6 local search](docs/architecture/PHASE6_LOCAL_SEARCH.md) and [Phase 7 local edit](docs/architecture/PHASE7_LOCAL_EDIT.md) and [Phase 8 local MCP stdio](docs/architecture/PHASE8_LOCAL_MCP_STDIO.md) and [Phase 9 signed runtime presence](docs/architecture/PHASE9_RUNTIME_PRESENCE.md).
+Do not modify or deploy the frozen Go archive. Do not merge into `main`, deploy to Railway, publish npm CLI, migrate existing credentials, or use production database snapshots until the full compatibility and security gates pass. Consult [feature parity plan](docs/architecture/FEATURE_PARITY_PLAN.md), [architecture](docs/architecture/MIGRATION.md), [Phase 1–2 progress](docs/architecture/IMPLEMENTATION_PROGRESS.md) and [Phase 3 auth/devices report](docs/architecture/PHASE3_AUTH_DEVICES.md) and [Phase 4 signed workspaces](docs/architecture/PHASE4_SIGNED_WORKSPACES.md) and [Phase 5 local file reads](docs/architecture/PHASE5_LOCAL_READ.md) and [Phase 6 local search](docs/architecture/PHASE6_LOCAL_SEARCH.md) and [Phase 7 local edit](docs/architecture/PHASE7_LOCAL_EDIT.md) and [Phase 8 local MCP stdio](docs/architecture/PHASE8_LOCAL_MCP_STDIO.md) and [Phase 9 signed runtime presence](docs/architecture/PHASE9_RUNTIME_PRESENCE.md) and [Phase 10 local MCP approvals](docs/architecture/PHASE10_LOCAL_MCP_APPROVALS.md).
