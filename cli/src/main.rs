@@ -29,10 +29,11 @@ Available in isolated Rust beta:
   codelocal local-search-files <id> <query> [limit]   Find names with .gitignore
   codelocal local-search-text <id> <text> [limit]    Find fixed text in files
   codelocal local-edit <id> <file> <sha256> <old> <new> [--all]   Hash-safe local edit
+  codelocal mcp                      Start local-only read/search MCP stdio server
 
 Not yet migrated from Go (will fail explicitly):
   codelocal switch-account
-  codelocal setup|doctor|agent|approvals|mcp
+  codelocal setup|doctor|agent|approvals
   codelocal stop|reset|uninstall
   codelocal                          Start local device runtime
 
@@ -95,7 +96,7 @@ fn run(args: &[String]) -> Result<(), String> {
                 "workspaceCount": items.len(),
                 "runtime": "not_implemented",
                 "pairing": if codelocal::pair::local_status()? { "paired_locally" } else { "not_paired" },
-                "mcp": "not_implemented",
+                "mcp": "local_stdio_read_search_only",
                 "localRead": "granted_only_manual",
                 "workspaceSync": "manual_signed_metadata",
                 "legacyStateModified": false
@@ -158,13 +159,14 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("{}", serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?);
             Ok(())
         }
+        "mcp" if args.len() == 1 => codelocal::mcp::serve_stdio(),
         "sync" if args.len() == 1 => codelocal::pair::sync(),
         "logout" if args.len() == 1 => codelocal::pair::logout(),
         "login" | "pair" if args.len() == 1 => codelocal::pair::login(false),
         "login" | "pair" if args.len() == 2 && args[1] == "--force" => codelocal::pair::login(true),
         "" => Err("CodeLocal Rust device runtime is not implemented yet; run --help for available beta commands".into()),
         "signout" | "switch-account" | "switch" |
-        "setup" | "doctor" | "agent" | "approvals" | "mcp" | "stop" | "reset" | "uninstall" => {
+        "setup" | "doctor" | "agent" | "approvals" | "stop" | "reset" | "uninstall" => {
             Err(format!("{command}: not implemented in Rust beta; the production Go CLI remains authoritative"))
         }
         other if args.len() == 1 && !other.starts_with('-') && Path::new(other).is_dir() => {
