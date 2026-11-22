@@ -5,8 +5,8 @@ This branch `beta` starts from `main` commit `365d372`. **The existing Next.js w
 | Directory | Ownership | Status |
 | --- | --- | --- |
 | `web/` | Existing CodeLocal Next.js 16 / React 19 product, copied unchanged from `main` | Source preserved; needs Rust backend |
-| `backend/` | New Rust Axum/Tokio cloud API/MCP backend | Bootstrap only |
-| `cli/` | New Rust CLI and future native machine runtime | Bootstrap only |
+| `backend/` | New Rust Axum/Tokio cloud API/MCP backend | Health/status + real CSRF GET contract; other auth/services pending |
+| `cli/` | New Rust CLI and future native machine runtime | Beta-isolated workspace grant/list/revoke/status; remote runtime pending |
 | `old-project/` | Frozen complete Go+web source from `main`, for compatibility, security and migration reference | Archive only; never deploy |
 | `docs/architecture/` | Parity inventory, contract requirements and phased migration | Active plan |
 
@@ -19,14 +19,18 @@ This branch `beta` starts from `main` commit `365d372`. **The existing Next.js w
 cargo run -p codelocal-backend
 # GET http://127.0.0.1:8080/healthz
 # GET http://127.0.0.1:8080/api/v1/system/status
+# GET http://127.0.0.1:8080/api/v1/auth/csrf
 
 # Terminal 2: existing Next.js product
 cd web
 npm ci
 CODELOCAL_BACKEND_URL=http://127.0.0.1:8080 npm run dev
 
-# Terminal 3: Rust CLI bootstrap
+# Terminal 3: Rust CLI workspace features (beta-only state)
 cargo run -p codelocal -- --version
+cargo run -p codelocal -- grant ./cli
+cargo run -p codelocal -- workspaces
+cargo run -p codelocal -- ungrant ./cli
 ```
 
 `CODELOCAL_BACKEND_URL` is the **server-only** destination used by the existing Next.js proxy. The Rust backend will implement the existing `/api/v1/*` and authentication contracts incrementally. Do not put private credentials into `NEXT_PUBLIC_*` variables.
@@ -40,4 +44,4 @@ cargo run -p codelocal -- --version
 
 **Policy:** Keep `main`/production untouched; do not claim a feature is migrated until there is a real Rust implementation with test evidence.
 
-See [Migration architecture](docs/architecture/MIGRATION.md) and [Feature inventory and plan](docs/architecture/FEATURE_PARITY_PLAN.md).
+See [Migration architecture](docs/architecture/MIGRATION.md), [Feature inventory and plan](docs/architecture/FEATURE_PARITY_PLAN.md) and [Phase 1 execution report](docs/architecture/IMPLEMENTATION_PROGRESS.md).

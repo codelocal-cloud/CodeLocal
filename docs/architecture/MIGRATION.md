@@ -64,5 +64,5 @@ Security gates: tenant isolation, credential redaction, PKCE, session rotation, 
 ## Current status
 
 - Preserved the existing `web/` source (52 page routes) from `main` on `beta`.
-- New Rust backend has only health/bootstrap status routes and the Rust CLI is a starter. **Business functionality is not migrated yet.**
+- Rust backend now exposes health/bootstrap plus the real Go-compatible `GET /api/v1/auth/csrf` contract. Rust CLI now supports beta-isolated workspace grant/list/revoke/status with compatible workspace IDs. **Full login, sessions, pairing, MCP execution and other business domains are not migrated.** See `IMPLEMENTATION_PROGRESS.md`.
 - Live `main` and production remain untouched. Do not push/deploy until separately requested.

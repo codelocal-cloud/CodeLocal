@@ -2,6 +2,8 @@
 //! No privileged workspace, auth, or MCP operations are exposed until
 //! their authorization and protocol contracts are implemented and tested.
 
+mod auth;
+
 use axum::{Json, Router, routing::get};
 use serde::{Deserialize, Serialize};
 
@@ -29,9 +31,15 @@ async fn status() -> Json<ServiceStatus> {
 }
 
 pub fn router() -> Router {
+    router_with_auth(auth::AuthConfig::from_env())
+}
+
+pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/system/status", get(status))
+        .route("/api/v1/auth/csrf", get(auth::csrf))
+        .with_state(config)
 }
 
 #[cfg(test)]
