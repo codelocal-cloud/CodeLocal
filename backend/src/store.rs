@@ -179,6 +179,14 @@ impl AuthStore {
                 "beta codelocal_audit_logs table is missing; apply reviewed SQL bootstrap",
             ));
         }
+        let pair_schema_ready: bool = client.query_one(
+            "SELECT to_regclass('codelocal_devices') IS NOT NULL AND to_regclass('codelocal_pairings') IS NOT NULL", &[],
+        ).await.map_err(|_| unavailable("beta pairing schema check failed"))?.get(0);
+        if !pair_schema_ready {
+            return Err(unavailable(
+                "beta device tables missing; apply reviewed 002_beta_devices.sql",
+            ));
+        }
         let mut conn = self
             .redis
             .get_multiplexed_async_connection()
@@ -383,6 +391,10 @@ pub fn now_millis() -> i64 {
         .unwrap_or_default()
         .as_millis() as i64
 }
+
+// Auth flow operations share the same store, credentials, and isolation checks.
+include!("store_auth_flows.rs");
+include!("store_devices.rs");
 
 #[cfg(test)]
 mod tests {

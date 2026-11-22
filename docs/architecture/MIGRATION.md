@@ -64,5 +64,5 @@ Security gates: tenant isolation, credential redaction, PKCE, session rotation, 
 ## Current status
 
 - Preserved the existing `web/` source (52 page routes) from `main` on `beta`.
-- Rust backend now exposes health/bootstrap plus the real Go-compatible `GET /api/v1/auth/csrf` contract. Rust CLI now supports beta-isolated workspace grant/list/revoke/status with compatible workspace IDs. **Full login, sessions, pairing, MCP execution and other business domains are not migrated.** See `IMPLEMENTATION_PROGRESS.md`.
+- Rust backend now has beta-isolated PostgreSQL/Redis authentication (signup, OTP, login, account, logout, reset/change password), pairing and device-list/revoke route sources, and a pure Ed25519 verifier. Rust CLI supports beta workspace operations and an explicit-API interactive pairing/login flow. **These services have not passed real PostgreSQL/Redis integration; OAuth, privileged signed transport, native runtime, 14 MCP tools, Project Brain and most domains remain incomplete.** See `IMPLEMENTATION_PROGRESS.md` and `PHASE3_AUTH_DEVICES.md`.
 - Live `main` and production remain untouched. Do not push/deploy until separately requested.

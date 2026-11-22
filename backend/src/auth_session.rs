@@ -66,7 +66,7 @@ fn login_redirect(next: &str, error: &str) -> Response {
     redirect_to(&format!("/login?{query}"))
 }
 
-fn redirect_to(target: &str) -> Response {
+pub(crate) fn redirect_to(target: &str) -> Response {
     let mut response = StatusCode::SEE_OTHER.into_response();
     // Location paths are strictly local/safe; never reflect unsanitized header data.
     if let Ok(location) = HeaderValue::from_str(target) {
@@ -75,7 +75,7 @@ fn redirect_to(target: &str) -> Response {
     response
 }
 
-fn error(code: StatusCode, key: &'static str) -> Response {
+pub(crate) fn error(code: StatusCode, key: &'static str) -> Response {
     let mut response = (code, Json(json!({"error": key}))).into_response();
     response
         .headers_mut()
@@ -100,19 +100,25 @@ pub(crate) fn valid_csrf(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
-fn csrf_matches(expected: &str, submitted: &str) -> bool {
+pub(crate) fn csrf_matches(expected: &str, submitted: &str) -> bool {
     valid_csrf(expected)
         && expected.len() == submitted.len()
         && bool::from(expected.as_bytes().ct_eq(submitted.as_bytes()))
 }
 
-fn random_url_token() -> Option<String> {
+pub(crate) fn random_url_token() -> Option<String> {
     let mut bytes = [0_u8; 32];
     getrandom::fill(&mut bytes).ok()?;
     Some(URL_SAFE_NO_PAD.encode(bytes))
 }
 
-fn set_cookie(headers: &mut HeaderMap, name: &str, value: &str, max_age: u64, secure: bool) {
+pub(crate) fn set_cookie(
+    headers: &mut HeaderMap,
+    name: &str,
+    value: &str,
+    max_age: u64,
+    secure: bool,
+) {
     let secure_attribute = if secure { "; Secure" } else { "" };
     let cookie = format!(
         "{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure_attribute}"
@@ -263,31 +269,46 @@ pub async fn login(
     let Some(user) = user else {
         return error(StatusCode::SERVICE_UNAVAILABLE, "auth_unavailable");
     };
-    let existing_device = cookie_value(&headers, DEVICE_COOKIE).filter(|cookie| valid_csrf(cookie));
+    issue_session(&config, &headers, &user, form.csrf, next, "auth.login").await
+}
+
+pub(crate) async fn issue_session(
+    config: &AuthConfig,
+    headers: &HeaderMap,
+    user: &User,
+    csrf: String,
+    next: &str,
+    event: &'static str,
+) -> Response {
+    let Some(store) = &config.store else {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "auth_unavailable");
+    };
+    let existing_device = cookie_value(headers, DEVICE_COOKIE).filter(|value| valid_csrf(value));
     let Some(device_token) = existing_device.map(str::to_owned).or_else(random_url_token) else {
         return error(StatusCode::SERVICE_UNAVAILABLE, "auth_unavailable");
     };
     let session = SessionState {
         user_id: user.id.clone(),
-        csrf: form.csrf,
+        csrf,
         created_at: now_millis(),
         security_version: user.security_version,
-        security: Some(signal_for(&config, &headers, &device_token)),
+        security: Some(signal_for(config, headers, &device_token)),
         risk_until: 0,
     };
     let session_id = match store.create_session(&session).await {
         Ok(id) => id,
         Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "auth_unavailable"),
     };
-    if store
-        .audit(Some(&user.id), "auth.login", json!({"method":"password"}))
-        .await
-        .is_err()
-    {
+    let detail = if event == "auth.register" {
+        json!({"emailVerified": true})
+    } else {
+        json!({"method": "password"})
+    };
+    if store.audit(Some(&user.id), event, detail).await.is_err() {
         let _ = store.delete_session(&session_id).await;
         return error(StatusCode::SERVICE_UNAVAILABLE, "auth_unavailable");
     }
-    let mut response = redirect_to(next);
+    let mut response = redirect_to(safe_next(next));
     set_cookie(
         response.headers_mut(),
         SESSION_COOKIE,
@@ -307,7 +328,7 @@ pub async fn login(
     response
 }
 
-async fn identify(
+pub(crate) async fn identify(
     store: &Arc<AuthStore>,
     config: &AuthConfig,
     headers: &HeaderMap,
@@ -482,6 +503,7 @@ mod tests {
             store: None,
             binding_secret: Some("test-binding-secret-long-long-long-long".into()),
             admin_emails: vec![],
+            mailer: None,
         };
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -516,6 +538,7 @@ mod tests {
             store: None,
             binding_secret: None,
             admin_emails: vec![],
+            mailer: None,
         })
         .oneshot(request)
         .await
@@ -531,6 +554,7 @@ mod tests {
             store: None,
             binding_secret: None,
             admin_emails: vec![],
+            mailer: None,
         };
         let router = router_with_auth(config);
         let response = router

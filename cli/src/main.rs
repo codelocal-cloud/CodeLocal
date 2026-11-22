@@ -18,19 +18,22 @@ Available in isolated Rust beta:
   codelocal ungrant <path|id>        Revoke beta authorization without deleting project
   codelocal workspaces               List beta-authorized workspaces
   codelocal status                   Show beta migration readiness
+  codelocal login|pair               Start beta device pairing via browser approval
+  codelocal login --force            Re-pair and replace saved beta credential
 
 Not yet migrated from Go (will fail explicitly):
-  codelocal login|logout|pair|switch-account
+  codelocal logout|switch-account
   codelocal setup|doctor|agent|approvals|mcp
   codelocal stop|reset|uninstall
   codelocal                          Start local device runtime
 
 Environment:
+  CODELOCAL_BETA_API_URL             Beta API (HTTPS, or localhost HTTP)
   CODELOCAL_BETA_STATE_DIR           Beta-only local state directory
                                      Default: ~/.codelocal-beta
 
 IMPORTANT: This is NOT the production CodeLocal client.
-No pairing, cloud sync, MCP or privileged execution is available yet.
+Pairing can create a local credential, but cloud sync, MCP and privileged execution are NOT available yet.
 "#;
 
 fn run(args: &[String]) -> Result<(), String> {
@@ -82,15 +85,17 @@ fn run(args: &[String]) -> Result<(), String> {
                 "stateDir": registry.state_dir(),
                 "workspaceCount": items.len(),
                 "runtime": "not_implemented",
-                "pairing": "not_implemented",
+                "pairing": if codelocal::pair::local_status()? { "paired_locally" } else { "not_paired" },
                 "mcp": "not_implemented",
                 "legacyStateModified": false
             });
             println!("{}", serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?);
             Ok(())
         }
+        "login" | "pair" if args.len() == 1 => codelocal::pair::login(false),
+        "login" | "pair" if args.len() == 2 && args[1] == "--force" => codelocal::pair::login(true),
         "" => Err("CodeLocal Rust device runtime is not implemented yet; run --help for available beta commands".into()),
-        "login" | "logout" | "signout" | "pair" | "switch-account" | "switch" |
+        "logout" | "signout" | "switch-account" | "switch" |
         "setup" | "doctor" | "agent" | "approvals" | "mcp" | "stop" | "reset" | "uninstall" => {
             Err(format!("{command}: not implemented in Rust beta; the production Go CLI remains authoritative"))
         }

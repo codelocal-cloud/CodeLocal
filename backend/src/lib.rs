@@ -4,7 +4,15 @@
 
 mod auth;
 mod auth_session;
+mod devices;
+// Verify request signatures before adding privileged native-runtime routes.
+pub mod device_signing;
+mod mailer;
+mod pair;
 mod password;
+mod password_reset;
+mod public_url;
+mod signup;
 mod store;
 
 use axum::{Json, Router, routing::get};
@@ -51,6 +59,35 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
         .route("/api/v1/auth/csrf", get(auth::csrf))
         .route("/api/v1/account", get(auth_session::account))
         .route("/login", axum::routing::post(auth_session::login))
+        .route("/signup", axum::routing::post(signup::start))
+        .route("/signup/verify", axum::routing::post(signup::verify))
+        .route("/api/v1/auth/signup-verification", get(signup::context))
+        .route(
+            "/forgot-password",
+            axum::routing::post(password_reset::forgot),
+        )
+        .route(
+            "/reset-password",
+            axum::routing::post(password_reset::reset),
+        )
+        .route(
+            "/account/password",
+            axum::routing::post(password_reset::change),
+        )
+        .route("/api/v1/auth/password-reset", get(password_reset::context))
+        .route("/pair/start", axum::routing::post(pair::start))
+        .route("/pair/approve", axum::routing::post(pair::approve))
+        .route("/pair/claim", axum::routing::post(pair::claim))
+        .route("/api/v1/pair/approve", get(pair::approve_context))
+        .route(
+            "/api/client/auth/check",
+            axum::routing::post(pair::auth_check),
+        )
+        .route("/api/v1/devices", get(devices::list))
+        .route(
+            "/api/v1/devices/{device_id}/revoke",
+            axum::routing::post(devices::revoke),
+        )
         .route("/logout", axum::routing::post(auth_session::logout))
         .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
         .with_state(config)

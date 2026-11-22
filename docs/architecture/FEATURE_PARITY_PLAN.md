@@ -59,10 +59,10 @@ All rows must reach **P** = verified integration of the preserved Next.js web wi
 
 | ID | Current capability and acceptance boundary | Archived source | New owner | Priority |
 | --- | --- | --- | --- | --- |
-| CORE-01 | Authentication: signup/verification, login/logout, password reset, cookie/session/CSRF, OAuth/OIDC and reauth | `internal/webauth`, `internal/oauth` | Rust identity/auth module | P0 |
+| CORE-01 | Authentication: signup/verification, login/logout, password reset, cookie/session/CSRF, OAuth/OIDC and reauth | `internal/webauth`, `internal/oauth` | Rust identity/auth module | P0 — Rust session/forms/OTP source implemented; DB E2E/OAuth/re-auth pending |
 | CORE-02 | Multi-user account isolation, authorization, admin guards, rate limiting, audit | `internal/cloud`, `cloudserver`, `security` | Rust identity + policy | P0 |
 | CORE-03 | Cloud storage, PostgreSQL schema/data migrations, domain stores and transactional operations | `internal/cloud` | Rust storage/domain modules | P0 |
-| CORE-04 | Pairing handshake, device identity, signed requests, credential lifecycle and presence | `internal/deviceauth`, `cloudserver/runtime_ws.go` | Rust cloud + local runtime | P0 |
+| CORE-04 | Pairing handshake, device identity, signed requests, credential lifecycle and presence | `internal/deviceauth`, `cloudserver/runtime_ws.go` | Rust cloud + local runtime | P0 — pair/claim/CLI source implemented; signature verification library only; WS/presence/replay gate pending |
 | CORE-05 | Account-scoped device/workspace routing, sync, reconnect, revocation | `internal/runtime`, `localclient`, `workspace` | Rust runtime transport | P0 |
 | CORE-06 | Remote MCP HTTPS, OAuth, public discovery, tool schemas, error shape and stream semantics | `internal/mcpgateway`, `internal/cloudmcp` | Rust MCP gateway | P0 |
 | CORE-07 | CLI startup, login/logout/switch account, status/stop, workspace grant/ungrant/list | `cmd/codelocal` | Rust CLI | P0 — beta workspace grant/list/revoke/status implemented; pairing/runtime pending |

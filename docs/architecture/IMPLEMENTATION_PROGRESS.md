@@ -64,4 +64,4 @@ Current milestone: **started P0 migration**, not full feature parity.
 4. Admin email selection uses explicit `CODELOCAL_BETA_ADMIN_EMAILS` (no automatic privileged default); full RBAC/tenancy and session risk handling still require review.
 5. Rust API does not yet claim general backend readiness. Do not deploy beta to a public endpoint or put beta auth behind a production domain.
 
-Next: fully isolated Postgres/Redis E2E; signup verification + scrypt-compatible password reset; audited OAuth/PKCE and device pairing; remaining 14 MCP tools with permission boundaries.
+Phase 3 now has source implementations of signup verification, password reset, device pairing and device-management API; see `PHASE3_AUTH_DEVICES.md` for the latest implementation and outstanding security gates. Real-store integration and full 14-tool MCP parity are still incomplete.

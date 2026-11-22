@@ -18,13 +18,14 @@ pub struct AuthConfig {
     pub store: Option<std::sync::Arc<crate::store::AuthStore>>,
     pub binding_secret: Option<String>,
     pub admin_emails: Vec<String>,
+    pub mailer: Option<crate::mailer::Mailer>,
 }
 
 impl AuthConfig {
     pub fn from_env() -> Self {
         let production = std::env::var("APP_ENV").is_ok_and(|env| env == "production")
             || std::env::var("NODE_ENV").is_ok_and(|env| env == "production");
-        let https_origin = ["CODELOCAL_PUBLIC_BASE_URL", "PUBLIC_BASE_URL"]
+        let https_origin = ["CODELOCAL_BETA_PUBLIC_BASE_URL"]
             .iter()
             .filter_map(|key| std::env::var(key).ok())
             .any(|url| url.trim().starts_with("https://"));
@@ -32,6 +33,7 @@ impl AuthConfig {
             secure_cookies: production || https_origin,
             store: None,
             binding_secret: std::env::var("CODELOCAL_BETA_SECURITY_BINDING_SECRET").ok(),
+            mailer: crate::mailer::Mailer::from_env(),
             admin_emails: std::env::var("CODELOCAL_BETA_ADMIN_EMAILS")
                 .unwrap_or_default()
                 .split(',')
@@ -129,6 +131,7 @@ mod tests {
             store: None,
             binding_secret: None,
             admin_emails: vec![],
+            mailer: None,
         })
         .oneshot(request.body(Body::empty()).unwrap())
         .await

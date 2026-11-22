@@ -1,0 +1,36 @@
+# Isolated local CodeLocal beta integration stack. NOT for production.
+# Run: docker compose -f backend/compose.beta.yml up -d --wait
+# DB auto-loads migrations on first clean volume boot only.
+name: codelocal-rust-beta
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: codelocal_beta
+      POSTGRES_USER: codelocal_beta
+      POSTGRES_PASSWORD: local_beta_only_change_me
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - rust_beta_postgres:/var/lib/postgresql/data
+      - ./migrations/001_beta_auth.sql:/docker-entrypoint-initdb.d/001_beta_auth.sql:ro
+      - ./migrations/002_beta_devices.sql:/docker-entrypoint-initdb.d/002_beta_devices.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codelocal_beta -d codelocal_beta"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    restart: "no"
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    restart: "no"
+volumes:
+  rust_beta_postgres:
