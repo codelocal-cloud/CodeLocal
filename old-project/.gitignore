@@ -1,0 +1,39 @@
+node_modules/
+.env
+.DS_Store
+npm-debug.log*
+*.test
+dist/
+.release/
+.codelocal-npm-cache/
+vision-computer-worktree/
+grap/
+
+# CodeLocal local-only runtime artifacts. Portable project config is explicitly allowed.
+.codelocal/*
+!.codelocal/project.json
+!.codelocal/quality.json
+!.codelocal/rules/
+!.codelocal/rules/**
+!.codelocal/skills/
+!.codelocal/skills/**
+
+.codelocal/worktrees/
+
+# Next.js / TypeScript build artifacts
+.next/
+*.tsbuildinfo
+
+# Release/build artifacts must not live in the repo root.
+*.tgz
+package/
+.release-main-clean/
+
+# Ephemeral deploy/SSH material must never be committed.
+.railway-codelocal-ephemeral
+.railway-codelocal-ephemeral.pub
+
+# Stray local-only scratch trees (hyphenated, not the canonical .codelocal/).
+.codelocal-artifacts/
+.codelocal-worktrees/
+.video-publish-e2e/

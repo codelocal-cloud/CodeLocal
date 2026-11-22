@@ -1,25 +1,18 @@
 {
-  "name": "@codelocal/web",
+  "name": "@codelocal/beta-web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "test:ui": "node src/lib/i18n/i18n.test.mjs && node src/app/blog/blog-i18n.test.mjs && node src/app/dashboard/dashboard-i18n.test.mjs && node src/lib/media-upload.test.mjs && node src/app/interface-layout.test.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test:ui && npm run build"
-  },
-  "engines": {
-    "node": "^22.13.0 || >=24.0.0"
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "next": "16.4.2",
     "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -28,5 +21,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

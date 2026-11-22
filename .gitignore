@@ -1,39 +1,32 @@
-node_modules/
-.env
+# New Rust / Next.js beta
+/target/
+/**/target/
+/node_modules/
+/**/node_modules/
+/**/.next/
+/**/.turbo/
+/**/*.tsbuildinfo
+/.env
+/.env.*
+!/.env.example
+/**/.env
+/**/.env.*
+!/**/.env.example
 .DS_Store
-npm-debug.log*
-*.test
+*.log
 dist/
 .release/
-.codelocal-npm-cache/
-vision-computer-worktree/
-grap/
-
-# CodeLocal local-only runtime artifacts. Portable project config is explicitly allowed.
+.worktrees/
+.codelocal-worktrees/
+.railway-codelocal-ephemeral*
 .codelocal/*
 !.codelocal/project.json
 !.codelocal/quality.json
 !.codelocal/rules/
-!.codelocal/rules/**
 !.codelocal/skills/
-!.codelocal/skills/**
-
-.codelocal/worktrees/
-
-# Next.js / TypeScript build artifacts
-.next/
-*.tsbuildinfo
-
-# Release/build artifacts must not live in the repo root.
-*.tgz
-package/
-.release-main-clean/
-
-# Ephemeral deploy/SSH material must never be committed.
-.railway-codelocal-ephemeral
-.railway-codelocal-ephemeral.pub
-
-# Stray local-only scratch trees (hyphenated, not the canonical .codelocal/).
-.codelocal-artifacts/
-.codelocal-worktrees/
-.video-publish-e2e/
+# Local vestiges of the original checkout
+/vision-computer-worktree/
+/grap/
+/web/.next/
+/web/node_modules/
+/web/next-env.d.ts

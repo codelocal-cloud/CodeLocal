@@ -1,87 +1,35 @@
-name: CodeLocal CI
+name: Beta Rust and Next.js CI
 
 on:
   push:
-    branches: [main, staging, dev, go-migration]
-    paths:
-      - 'cmd/codelocal/**'
-      - 'cmd/computerhelper/**'
-      - 'cmd/computernative/**'
-      - 'cmd/release/**'
-      - 'internal/**'
-      - '!internal/cloud/**'
-      - '!internal/cloudserver/**'
-      - 'legacy/typescript-runtime/**'
-      - 'scripts/**'
-      - 'go.mod'
-      - 'go.sum'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'web/**'
-      - '.github/workflows/ci.yml'
-      - '.nvmrc'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/release-npm.yml'
-      - '.github/workflows/release-npm-beta.yml'
+    branches: [beta]
   pull_request:
-    paths:
-      - 'cmd/codelocal/**'
-      - 'cmd/computerhelper/**'
-      - 'cmd/computernative/**'
-      - 'cmd/release/**'
-      - 'internal/**'
-      - '!internal/cloud/**'
-      - '!internal/cloudserver/**'
-      - 'legacy/typescript-runtime/**'
-      - 'scripts/**'
-      - 'go.mod'
-      - 'go.sum'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'web/**'
-      - '.github/workflows/ci.yml'
-      - '.nvmrc'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/release-npm.yml'
-      - '.github/workflows/release-npm-beta.yml'
-  workflow_dispatch:
+    branches: [beta]
 
 jobs:
-  core:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.25.x'
-          cache: true
-      - name: Test
-        run: go test ./...
-      - name: Vet
-        run: go vet ./...
-      - name: Build native commands
-        run: go build ./cmd/...
-
-  packaging-smoke:
+  rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          go-version: '1.25.x'
-          cache: true
-      - uses: actions/setup-node@v6
+          components: clippy, rustfmt
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Test npm launcher auto-update
-        run: npm run test:launcher
-      - name: Build cross-platform npm staging package
-        run: go run ./cmd/release
-      - name: Inspect npm package
-        run: npm pack --dry-run ./.release/npm
-      - name: Native CLI smoke
-        run: node .release/npm/bin/codelocal.js --version
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
