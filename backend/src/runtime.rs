@@ -95,7 +95,7 @@ pub async fn connect(
     // /api/client/runtime/ws with an empty body.
     let device = match authorize_signed_request(&store, &headers, &uri, "GET", b"").await {
         Ok(device) => device,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     ws.max_message_size(MAX_WS_FRAME)
         .max_frame_size(MAX_WS_FRAME)

@@ -76,7 +76,7 @@ pub(crate) async fn authorize_signed_device(
     headers: &HeaderMap,
     uri: &Uri,
     body: &[u8],
-) -> Result<DeviceRecord, Response> {
+) -> Result<DeviceRecord, Box<Response>> {
     authorize_signed_request(store, headers, uri, "POST", body).await
 }
 
@@ -86,26 +86,34 @@ pub(crate) async fn authorize_signed_request(
     uri: &Uri,
     method: &str,
     body: &[u8],
-) -> Result<DeviceRecord, Response> {
+) -> Result<DeviceRecord, Box<Response>> {
     let Some((id, secret)) = presented_credential(headers) else {
-        return Err(error(StatusCode::UNAUTHORIZED, "credential_invalid"));
+        return Err(Box::new(error(
+            StatusCode::UNAUTHORIZED,
+            "credential_invalid",
+        )));
     };
     let secret_hash = hex::encode(Sha256::digest(secret.as_bytes()));
     let device = match store.authenticate_device(id, &secret_hash).await {
         Ok(Some(device)) => device,
-        Ok(None) => return Err(error(StatusCode::UNAUTHORIZED, "credential_invalid")),
+        Ok(None) => {
+            return Err(Box::new(error(
+                StatusCode::UNAUTHORIZED,
+                "credential_invalid",
+            )));
+        }
         Err(_) => {
-            return Err(error(
+            return Err(Box::new(error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "credential_unavailable",
-            ));
+            )));
         }
     };
     let Some(public_key) = device.public_key.as_deref() else {
-        return Err(error(
+        return Err(Box::new(error(
             StatusCode::UNAUTHORIZED,
             "device_public_key_required",
-        ));
+        )));
     };
     let timestamp = required_header(headers, "x-codelocal-signature-timestamp").unwrap_or("");
     let nonce = required_header(headers, "x-codelocal-signature-nonce").unwrap_or("");
@@ -120,15 +128,21 @@ pub(crate) async fn authorize_signed_request(
         body,
     };
     if device_signing::verify(public_key, proof, now_millis() / 1000).is_err() {
-        return Err(error(StatusCode::UNAUTHORIZED, "invalid_device_signature"));
+        return Err(Box::new(error(
+            StatusCode::UNAUTHORIZED,
+            "invalid_device_signature",
+        )));
     }
     match store.consume_device_nonce(id, nonce).await {
         Ok(true) => Ok(device),
-        Ok(false) => Err(error(StatusCode::CONFLICT, "device_signature_replayed")),
-        Err(_) => Err(error(
+        Ok(false) => Err(Box::new(error(
+            StatusCode::CONFLICT,
+            "device_signature_replayed",
+        ))),
+        Err(_) => Err(Box::new(error(
             StatusCode::SERVICE_UNAVAILABLE,
             "replay_protection_unavailable",
-        )),
+        ))),
     }
 }
 
@@ -146,7 +160,7 @@ pub async fn sync(
     };
     let device = match authorize_signed_device(store, &headers, &uri, &body).await {
         Ok(device) => device,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let input: SyncBody = match serde_json::from_slice(&body) {
         Ok(input) => input,

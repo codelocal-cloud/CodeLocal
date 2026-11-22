@@ -21,7 +21,7 @@ pub async fn logout(
     };
     let device = match authorize_signed_device(store, &headers, &uri, &body).await {
         Ok(device) => device,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     if body.len() > 1024 || serde_json::from_slice::<serde_json::Value>(&body).is_err() {
         return error(StatusCode::BAD_REQUEST, "invalid_request");

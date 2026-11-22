@@ -379,7 +379,7 @@ impl AuthStore {
         let detail_str = detail.to_string();
         // Avoid depending on tokio-postgres serde_json sql features.
         client.execute(
-            "INSERT INTO codelocal_audit_logs(id,user_id,event,detail,created_at) VALUES($1,$2,$3,$4::jsonb,$5)",
+            "INSERT INTO codelocal_audit_logs(id,user_id,event,detail,created_at) VALUES($1,$2,$3,($4::text)::jsonb,$5)",
             &[&id, &user_id, &event, &detail_str, &now_millis()],
         ).await.map_err(|_| unavailable("beta login audit unavailable"))?;
         Ok(())
@@ -513,6 +513,23 @@ mod tests {
             &[&user_id, &email, &hash, &salt, &now_millis(), &referral],
         ).await.unwrap();
         drop(client);
+        let persisted = store.by_email(&email).await.unwrap().unwrap();
+        assert_eq!(persisted.id, user_id);
+        assert!(crate::password::verify_password(
+            pwd,
+            &persisted.password_salt,
+            &persisted.password_hash
+        ));
+        // Keep the real-store audit write in the E2E preflight so a broken
+        // PostgreSQL JSONB parameter fails at the exact operation.
+        store
+            .audit(
+                Some(&user_id),
+                "auth.integration_preflight",
+                serde_json::json!({"test":"beta_isolated"}),
+            )
+            .await
+            .unwrap();
 
         let mut config = AuthConfig::from_env();
         config.store = Some(store.clone());
