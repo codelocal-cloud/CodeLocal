@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-axum = { version = "0.8", features = ["form"] }
+axum = { version = "0.8", features = ["form", "ws"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio = { version = "1", features = ["full"] }

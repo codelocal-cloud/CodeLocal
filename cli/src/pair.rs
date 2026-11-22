@@ -548,6 +548,68 @@ pub fn logout() -> Result<(), String> {
     Ok(())
 }
 
+/// Credentials for the Rust-beta runtime, never exposed to an MCP tool.
+pub(crate) struct RuntimeAccess {
+    pub origin: String,
+    pub credential_id: String,
+    pub credential_secret: String,
+    pub device_id: String,
+    pub signing_key: SigningKey,
+}
+
+pub(crate) fn runtime_access() -> Result<RuntimeAccess, String> {
+    let registry = Registry::beta_default().map_err(|e| e.to_string())?;
+    let origin = beta_url()?;
+    let credential = load_credential(registry.state_dir())?
+        .ok_or("no paired beta device; run codelocal login first")?;
+    if credential.server_url != origin {
+        return Err("beta device credential is bound to a different API URL".into());
+    }
+    let raw = URL_SAFE_NO_PAD
+        .decode(&credential.device_private_key)
+        .map_err(|_| "runtime signing key unavailable; re-pair with login --force")?;
+    let seed: [u8; 32] = raw.try_into().map_err(|_| "invalid runtime signing key")?;
+    let signing_key = SigningKey::from_bytes(&seed);
+    if URL_SAFE_NO_PAD.encode(signing_key.verifying_key().as_bytes())
+        != credential.device_public_key
+    {
+        return Err("runtime signing keys do not match".into());
+    }
+    Ok(RuntimeAccess {
+        origin,
+        credential_id: credential.credential_id,
+        credential_secret: credential.credential_secret,
+        device_id: credential.device_id,
+        signing_key,
+    })
+}
+
+pub(crate) fn runtime_get_headers(access: &RuntimeAccess) -> Result<Vec<(String, String)>, String> {
+    let mut nonce = [0u8; 18];
+    getrandom::fill(&mut nonce).map_err(|_| "runtime secure nonce unavailable")?;
+    let nonce = URL_SAFE_NO_PAD.encode(nonce);
+    let timestamp = now_millis() / 1000;
+    let canonical =
+        canonical_device_request("GET", "/api/client/runtime/ws", timestamp, &nonce, b"");
+    let signature = URL_SAFE_NO_PAD.encode(access.signing_key.sign(&canonical).to_bytes());
+    Ok(vec![
+        (
+            "X-CodeLocal-Credential-Id".into(),
+            access.credential_id.clone(),
+        ),
+        (
+            "Authorization".into(),
+            format!("Device {}", access.credential_secret),
+        ),
+        (
+            "X-CodeLocal-Signature-Timestamp".into(),
+            timestamp.to_string(),
+        ),
+        ("X-CodeLocal-Signature-Nonce".into(), nonce),
+        ("X-CodeLocal-Signature".into(), signature),
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

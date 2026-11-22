@@ -11,6 +11,7 @@ pub struct WorkspaceMetadata {
 }
 #[derive(Debug, Clone)]
 pub struct WorkspaceRow {
+    pub credential_id: String,
     pub device_id: String,
     pub device_name: String,
     pub workspace_id: String,
@@ -77,15 +78,15 @@ impl AuthStore {
     pub async fn list_workspace_catalog(&self, user_id: &str) -> Result<Vec<WorkspaceRow>, StoreError> {
         let client = self.pool.get().await.map_err(|_| unavailable("beta PostgreSQL unavailable"))?;
         let rows = client.query(
-            "SELECT w.device_id,d.device_name,w.workspace_id,w.workspace_name,w.managed,w.system_app,w.last_seen_at \
+            "SELECT d.credential_id,w.device_id,d.device_name,w.workspace_id,w.workspace_name,w.managed,w.system_app,w.last_seen_at \
             FROM codelocal_workspaces w JOIN codelocal_devices d ON d.user_id=w.user_id AND d.device_id=w.device_id \
             WHERE w.user_id=$1 AND d.revoked_at IS NULL ORDER BY w.last_seen_at DESC LIMIT 1000",
             &[&user_id]
         ).await.map_err(|_| unavailable("beta workspace query failed"))?;
         Ok(rows.into_iter().map(|row| WorkspaceRow {
-            device_id:row.get(0),device_name:row.get(1),workspace_id:row.get(2),
-            workspace_name:row.get(3),managed:row.get(4),system_app:row.get(5),
-            last_seen_at:row.get(6),
+            credential_id:row.get(0), device_id:row.get(1),device_name:row.get(2),workspace_id:row.get(3),
+            workspace_name:row.get(4),managed:row.get(5),system_app:row.get(6),
+            last_seen_at:row.get(7),
         }).collect())
     }
 }

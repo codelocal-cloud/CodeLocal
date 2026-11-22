@@ -26,28 +26,34 @@ pub async fn list(State(config): State<AuthConfig>, headers: HeaderMap) -> Respo
         Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "devices_unavailable"),
     };
     let mut paired = 0;
+    let mut online = 0;
     let mut revoked = 0;
-    let items = devices
-        .into_iter()
-        .map(|device| {
-            let status = if device.revoked_at.is_some() {
-                revoked += 1;
-                "revoked"
-            } else {
-                paired += 1;
-                "offline"
-            };
-            json!({
-                "deviceId": device.device_id,
-                "deviceName": device.device_name,
-                "status": status,
-                "createdAt": device.created_at,
-                "lastSeenAt": device.last_seen_at,
-            })
-        })
-        .collect::<Vec<_>>();
+    let mut items = Vec::with_capacity(devices.len());
+    for device in devices {
+        let status = if device.revoked_at.is_some() {
+            revoked += 1;
+            "revoked"
+        } else {
+            paired += 1;
+            match store.runtime_presence(&device.credential_id).await {
+                Ok(Some(_)) => {
+                    online += 1;
+                    "online"
+                }
+                Ok(None) => "offline",
+                Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "presence_unavailable"),
+            }
+        };
+        items.push(json!({
+            "deviceId": device.device_id,
+            "deviceName": device.device_name,
+            "status": status,
+            "createdAt": device.created_at,
+            "lastSeenAt": device.last_seen_at,
+        }));
+    }
     Json(json!({
-        "summary": { "paired": paired, "online": 0, "revoked": revoked },
+        "summary": { "paired": paired, "online": online, "revoked": revoked },
         "items": items,
     }))
     .into_response()

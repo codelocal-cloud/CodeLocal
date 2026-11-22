@@ -409,6 +409,7 @@ pub fn now_millis() -> i64 {
 include!("store_auth_flows.rs");
 include!("store_devices.rs");
 include!("store_workspaces.rs");
+include!("store_presence.rs");
 
 #[cfg(test)]
 mod tests {
@@ -665,6 +666,67 @@ mod tests {
         assert_eq!(
             store.list_workspace_catalog(&user_id).await.unwrap().len(),
             1
+        );
+        assert_eq!(
+            store
+                .registered_runtime_workspaces(&user_id, &device.device_id)
+                .await
+                .unwrap(),
+            vec!["my-beta-workspace".to_owned()]
+        );
+        let visible = vec!["my-beta-workspace".to_owned()];
+        let old_lease = store
+            .begin_runtime_presence(&credential_id, &visible)
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .runtime_presence(&credential_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .workspace_ids,
+            visible
+        );
+        let current_lease = store
+            .begin_runtime_presence(&credential_id, &visible)
+            .await
+            .unwrap();
+        assert!(
+            !store
+                .refresh_runtime_presence(&credential_id, &old_lease, &[])
+                .await
+                .unwrap()
+        );
+        store
+            .clear_runtime_presence(&credential_id, &old_lease)
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .runtime_presence(&credential_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .lease,
+            current_lease.lease
+        );
+        assert!(
+            store
+                .refresh_runtime_presence(&credential_id, &current_lease, &visible)
+                .await
+                .unwrap()
+        );
+        store
+            .clear_runtime_presence(&credential_id, &current_lease)
+            .await
+            .unwrap();
+        assert!(
+            store
+                .runtime_presence(&credential_id)
+                .await
+                .unwrap()
+                .is_none()
         );
         assert_eq!(store.sync_workspaces(&device, &[]).await.unwrap(), 1);
         assert!(

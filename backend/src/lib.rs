@@ -13,6 +13,7 @@ mod pair;
 mod password;
 mod password_reset;
 mod public_url;
+mod runtime;
 mod signup;
 mod store;
 mod workspaces;
@@ -85,6 +86,7 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
             "/api/client/auth/check",
             axum::routing::post(pair::auth_check),
         )
+        .route("/api/client/runtime/ws", get(runtime::connect))
         .route("/api/v1/devices", get(devices::list))
         .route("/api/v1/workspaces", get(workspaces::catalog))
         .route(

@@ -30,12 +30,13 @@ Available in isolated Rust beta:
   codelocal local-search-text <id> <text> [limit]    Find fixed text in files
   codelocal local-edit <id> <file> <sha256> <old> <new> [--all]   Hash-safe local edit
   codelocal mcp                      Start local-only read/search MCP stdio server
+  codelocal runtime                  Start beta device presence over signed WebSocket
+  codelocal runtime --once           Test one authenticated runtime connection
 
 Not yet migrated from Go (will fail explicitly):
   codelocal switch-account
   codelocal setup|doctor|agent|approvals
   codelocal stop|reset|uninstall
-  codelocal                          Start local device runtime
 
 Environment:
   CODELOCAL_BETA_API_URL             Beta API (HTTPS, or localhost HTTP)
@@ -43,7 +44,7 @@ Environment:
                                      Default: ~/.codelocal-beta
 
 IMPORTANT: This is NOT the production CodeLocal client.
-Signed manual workspace metadata sync is available. WebSocket runtime, MCP and privileged remote execution are NOT available yet.
+Signed workspace metadata sync and WebSocket presence are available. Remote MCP/terminal execution is NOT available yet.
 "#;
 
 fn run(args: &[String]) -> Result<(), String> {
@@ -57,17 +58,33 @@ fn run(args: &[String]) -> Result<(), String> {
             print!("{HELP}");
             Ok(())
         }
-        "grant" | "add" | "." if command == "." && args.len() == 1 || (command != "." && args.len() <= 2) => {
-            let path = if command == "." { "." } else { args.get(1).map(String::as_str).unwrap_or(".") };
+        "grant" | "add" | "."
+            if command == "." && args.len() == 1 || (command != "." && args.len() <= 2) =>
+        {
+            let path = if command == "." {
+                "."
+            } else {
+                args.get(1).map(String::as_str).unwrap_or(".")
+            };
             let registry = Registry::beta_default().map_err(|error| error.to_string())?;
             let ws = registry.grant(path).map_err(|error| error.to_string())?;
-            println!("✓ Workspace added: {}\n  ID: {}\n  Path: {}", ws.workspace_name, ws.workspace_id, ws.local_path.display());
-            println!("Beta grant saved locally. Run `codelocal sync` to sync metadata; remote runtime is not yet implemented.");
+            println!(
+                "✓ Workspace added: {}\n  ID: {}\n  Path: {}",
+                ws.workspace_name,
+                ws.workspace_id,
+                ws.local_path.display()
+            );
+            println!(
+                "Beta grant saved locally. Run `codelocal sync` to sync metadata; remote runtime is not yet implemented."
+            );
             Ok(())
         }
         "ungrant" | "remove" if args.len() == 2 => {
             let registry = Registry::beta_default().map_err(|error| error.to_string())?;
-            if registry.revoke(&args[1]).map_err(|error| error.to_string())? {
+            if registry
+                .revoke(&args[1])
+                .map_err(|error| error.to_string())?
+            {
                 println!("✓ Workspace authorization removed from Rust beta state.");
                 Ok(())
             } else {
@@ -81,7 +98,12 @@ fn run(args: &[String]) -> Result<(), String> {
                 println!("No local CodeLocal beta workspaces authorized.");
             } else {
                 for ws in items {
-                    println!("{}\t{}\t{}", ws.workspace_id, ws.workspace_name, ws.local_path.display());
+                    println!(
+                        "{}\t{}\t{}",
+                        ws.workspace_id,
+                        ws.workspace_name,
+                        ws.local_path.display()
+                    );
                 }
             }
             Ok(())
@@ -94,89 +116,137 @@ fn run(args: &[String]) -> Result<(), String> {
                 "channel": "rust-beta",
                 "stateDir": registry.state_dir(),
                 "workspaceCount": items.len(),
-                "runtime": "not_implemented",
+                "runtime": "signed_websocket_presence_only",
                 "pairing": if codelocal::pair::local_status()? { "paired_locally" } else { "not_paired" },
                 "mcp": "local_stdio_read_search_only",
                 "localRead": "granted_only_manual",
                 "workspaceSync": "manual_signed_metadata",
                 "legacyStateModified": false
             });
-            println!("{}", serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?
+            );
             Ok(())
         }
         "local-info" if args.len() == 3 => {
             let registry = Registry::beta_default().map_err(|err| err.to_string())?;
-            let reader = LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let reader =
+                LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
             let info = reader.info(&args[2]).map_err(|err| err.to_string())?;
-            println!("{}", serde_json::to_string_pretty(&info).map_err(|err| err.to_string())?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&info).map_err(|err| err.to_string())?
+            );
             Ok(())
         }
         "local-read" if args.len() == 3 || args.len() == 5 => {
             let registry = Registry::beta_default().map_err(|err| err.to_string())?;
-            let reader = LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let reader =
+                LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
             let (from, to) = if args.len() == 5 {
-                let from = args[3].parse::<usize>().map_err(|_| "invalid start line number")?;
-                let to = args[4].parse::<usize>().map_err(|_| "invalid end line number")?;
+                let from = args[3]
+                    .parse::<usize>()
+                    .map_err(|_| "invalid start line number")?;
+                let to = args[4]
+                    .parse::<usize>()
+                    .map_err(|_| "invalid end line number")?;
                 (Some(from), Some(to))
-            } else { (None, None) };
-            let file = reader.read(&args[2], from, to).map_err(|err| err.to_string())?;
-            println!("{}", serde_json::to_string_pretty(&file).map_err(|err| err.to_string())?);
+            } else {
+                (None, None)
+            };
+            let file = reader
+                .read(&args[2], from, to)
+                .map_err(|err| err.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&file).map_err(|err| err.to_string())?
+            );
             Ok(())
         }
         "local-read-many" if args.len() >= 3 && args.len() <= 22 => {
             let registry = Registry::beta_default().map_err(|err| err.to_string())?;
-            let reader = LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let reader =
+                LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
             let result = reader.many(&args[2..]).map_err(|err| err.to_string())?;
-            println!("{}", serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?
+            );
             Ok(())
         }
         "local-search-files" | "local-search-text" if args.len() == 3 || args.len() == 4 => {
             let registry = Registry::beta_default().map_err(|err| err.to_string())?;
-            let reader = LocalReader::from_registry(&registry, &args[1])
-                .map_err(|err| err.to_string())?;
+            let reader =
+                LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
             let limit = if let Some(raw) = args.get(3) {
                 raw.parse::<usize>().map_err(|_| "invalid result limit")?
             } else {
                 100
             };
             let value = if command == "local-search-files" {
-                serde_json::to_value(reader.search_files(&args[2], limit)
-                    .map_err(|err| err.to_string())?).map_err(|err| err.to_string())?
+                serde_json::to_value(
+                    reader
+                        .search_files(&args[2], limit)
+                        .map_err(|err| err.to_string())?,
+                )
+                .map_err(|err| err.to_string())?
             } else {
-                serde_json::to_value(reader.search_text(&args[2], limit)
-                    .map_err(|err| err.to_string())?).map_err(|err| err.to_string())?
+                serde_json::to_value(
+                    reader
+                        .search_text(&args[2], limit)
+                        .map_err(|err| err.to_string())?,
+                )
+                .map_err(|err| err.to_string())?
             };
-            println!("{}", serde_json::to_string_pretty(&value).map_err(|err| err.to_string())?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value).map_err(|err| err.to_string())?
+            );
             Ok(())
         }
         "local-edit" if args.len() == 6 || args.len() == 7 && args[6] == "--all" => {
             let registry = Registry::beta_default().map_err(|err| err.to_string())?;
-            let reader = LocalReader::from_registry(&registry, &args[1])
+            let reader =
+                LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let result = reader
+                .edit_exact(&args[2], &args[3], &args[4], &args[5], args.len() == 7)
                 .map_err(|err| err.to_string())?;
-            let result = reader.edit_exact(
-                &args[2], &args[3], &args[4], &args[5], args.len() == 7
-            ).map_err(|err| err.to_string())?;
-            println!("{}", serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?
+            );
             Ok(())
         }
         "mcp" if args.len() == 1 => codelocal::mcp::serve_stdio(),
+        "runtime" if args.len() == 1 => codelocal::runtime::start(false),
+        "runtime" if args.len() == 2 && args[1] == "--once" => codelocal::runtime::start(true),
         "sync" if args.len() == 1 => codelocal::pair::sync(),
         "logout" if args.len() == 1 => codelocal::pair::logout(),
         "login" | "pair" if args.len() == 1 => codelocal::pair::login(false),
         "login" | "pair" if args.len() == 2 && args[1] == "--force" => codelocal::pair::login(true),
-        "" => Err("CodeLocal Rust device runtime is not implemented yet; run --help for available beta commands".into()),
-        "signout" | "switch-account" | "switch" |
-        "setup" | "doctor" | "agent" | "approvals" | "stop" | "reset" | "uninstall" => {
-            Err(format!("{command}: not implemented in Rust beta; the production Go CLI remains authoritative"))
-        }
+        "" => codelocal::runtime::start(false),
+        "signout" | "switch-account" | "switch" | "setup" | "doctor" | "agent" | "approvals"
+        | "stop" | "reset" | "uninstall" => Err(format!(
+            "{command}: not implemented in Rust beta; the production Go CLI remains authoritative"
+        )),
         other if args.len() == 1 && !other.starts_with('-') && Path::new(other).is_dir() => {
             let registry = Registry::beta_default().map_err(|error| error.to_string())?;
             let ws = registry.grant(other).map_err(|error| error.to_string())?;
-            println!("✓ Workspace added: {}\n  ID: {}\n  Path: {}", ws.workspace_name, ws.workspace_id, ws.local_path.display());
-            println!("Beta grant saved locally. Run `codelocal sync` to sync metadata; remote runtime is not yet implemented.");
+            println!(
+                "✓ Workspace added: {}\n  ID: {}\n  Path: {}",
+                ws.workspace_name,
+                ws.workspace_id,
+                ws.local_path.display()
+            );
+            println!(
+                "Beta grant saved locally. Run `codelocal sync` to sync metadata; remote runtime is not yet implemented."
+            );
             Ok(())
         }
-        other => Err(format!("invalid or unavailable CodeLocal Rust beta command: {other} (run --help)")),
+        other => Err(format!(
+            "invalid or unavailable CodeLocal Rust beta command: {other} (run --help)"
+        )),
     }
 }
 

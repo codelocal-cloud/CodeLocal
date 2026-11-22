@@ -7,14 +7,14 @@ This `beta` branch preserves the exact CodeLocal Next.js 16 / React 19 frontend 
 | Component | Result |
 | --- | --- |
 | `web/` | Original 52 Next.js page routes and UI preserved; full web check/build passes |
-| `cli/` | Rust beta registry, Ed25519 pairing, signed workspace sync/logout, local bounded read/search, SHA-256-checked manual edits and read-only MCP stdio server (4 tools); no remote host execution |
-| `backend/` | Rust beta auth/session/OTP/password reset, device pairing and revocation, signed Ed25519 workspace sync with Redis anti-replay, and account-scoped workspace catalog. **Real-store end-to-end testing pending** |
-| `backend/src/device_signing.rs` | Go-compatible Ed25519 verifier now enforced for workspace metadata sync, with Redis nonce replay protection; no privileged file/terminal/MCP endpoint |
+| `cli/` | Rust beta registry, Ed25519 pairing, signed workspace sync/logout, bounded local file read/search/edit, read-only MCP stdio (4 tools) and foreground signed WebSocket device presence; no remote host execution |
+| `backend/` | Rust beta auth/session/OTP/password reset, device pairing/revocation, signed workspace sync, and WebSocket device presence (Redis TTL + revocation checks). Account-scoped Devices/Workspaces dashboards use presence data. **Real-store end-to-end testing pending** |
+| `backend/src/device_signing.rs` | Go-compatible Ed25519 verifier and one-time Redis nonce now gate workspace sync and runtime WebSocket upgrade; no privileged file/terminal/MCP endpoint |
 | `backend/compose.beta.yml` | Isolated loopback PostgreSQL+Redis test stack (Docker daemon must be running) |
 | `backend/migrations/` | Isolated beta user/audit, device/pairing and workspace metadata SQL. **Never applied to production** |
 | `docs/architecture/` | Contract parity plan, migration waves and execution reports |
 
-**This beta is NOT production-ready.** Workspace metadata synchronization now has a signed anti-replay gate, but the Cloud native-runtime WebSocket transport, full workspace authorization/revocation handshake, 14 MCP tool behaviors, Plugins, Project Brain, chat, knowledge, social and many other services are not yet ported. A route exists only if it implements a real slice of its domain. There is no fake authenticated state or fake device presence.
+**This beta is NOT production-ready.** Signed workspace metadata sync and a **presence-only** WebSocket runtime are implemented in Rust; remote workspace activation, privileged command dispatch, full revocation protocol, 14 MCP tool behaviors, Plugins, Project Brain, chat, knowledge, social and many other services are not yet ported. A route exists only if it implements a real slice of its domain. No authenticated state or device presence is fabricated.
 
 ## Run the isolated beta stack
 
@@ -53,6 +53,8 @@ cargo run -p codelocal -- local-edit <workspace-id> src/lib.rs <expected-sha256>
 # Start read-only MCP stdio locally (AI client sends JSON-RPC over stdin/stdout):
 cargo run -p codelocal -- mcp
 cargo run -p codelocal -- sync  # signed metadata only; no paths or remote host execution
+cargo run -p codelocal -- runtime --once # one signed WebSocket registration check
+cargo run -p codelocal -- runtime        # foreground presence + heartbeat; Ctrl+C to stop
 # When testing is finished: cargo run -p codelocal -- logout
 ```
 
@@ -75,8 +77,8 @@ docker compose -f backend/compose.beta.yml down
 
 The service uses **beta-specific** environment variables for DB, Redis, security binding, public URL and Resend mail delivery to avoid accidentally using production credentials. Email OTP uses a 10-minute pending record, 6-digit code, hash, limited attempts and actual delivery; if mail is unconfigured it returns 503 rather than claiming email sent. Password reset increments `securityVersion` to invalidate older browser sessions.
 
-Device pairing still does not enable privileged local operations. The signed request gate, user-device ownership check and replay protection protect metadata sync only; explicit workspace permission and remote runtime approval gates must be completed before exposing MCP/file/terminal execution.
+Device pairing still does not enable privileged local operations. Signed request authentication, user-device ownership and Redis replay prevention protect workspace metadata sync and WebSocket presence only; explicit per-action approval and authorization gates must be completed before exposing remote MCP/file/terminal execution.
 
 ## Release safety
 
-Do not modify or deploy the frozen Go archive. Do not merge into `main`, deploy to Railway, publish npm CLI, migrate existing credentials, or use production database snapshots until the full compatibility and security gates pass. Consult [feature parity plan](docs/architecture/FEATURE_PARITY_PLAN.md), [architecture](docs/architecture/MIGRATION.md), [Phase 1–2 progress](docs/architecture/IMPLEMENTATION_PROGRESS.md) and [Phase 3 auth/devices report](docs/architecture/PHASE3_AUTH_DEVICES.md) and [Phase 4 signed workspaces](docs/architecture/PHASE4_SIGNED_WORKSPACES.md) and [Phase 5 local file reads](docs/architecture/PHASE5_LOCAL_READ.md) and [Phase 6 local search](docs/architecture/PHASE6_LOCAL_SEARCH.md) and [Phase 7 local edit](docs/architecture/PHASE7_LOCAL_EDIT.md) and [Phase 8 local MCP stdio](docs/architecture/PHASE8_LOCAL_MCP_STDIO.md).
+Do not modify or deploy the frozen Go archive. Do not merge into `main`, deploy to Railway, publish npm CLI, migrate existing credentials, or use production database snapshots until the full compatibility and security gates pass. Consult [feature parity plan](docs/architecture/FEATURE_PARITY_PLAN.md), [architecture](docs/architecture/MIGRATION.md), [Phase 1–2 progress](docs/architecture/IMPLEMENTATION_PROGRESS.md) and [Phase 3 auth/devices report](docs/architecture/PHASE3_AUTH_DEVICES.md) and [Phase 4 signed workspaces](docs/architecture/PHASE4_SIGNED_WORKSPACES.md) and [Phase 5 local file reads](docs/architecture/PHASE5_LOCAL_READ.md) and [Phase 6 local search](docs/architecture/PHASE6_LOCAL_SEARCH.md) and [Phase 7 local edit](docs/architecture/PHASE7_LOCAL_EDIT.md) and [Phase 8 local MCP stdio](docs/architecture/PHASE8_LOCAL_MCP_STDIO.md) and [Phase 9 signed runtime presence](docs/architecture/PHASE9_RUNTIME_PRESENCE.md).

@@ -77,6 +77,16 @@ pub(crate) async fn authorize_signed_device(
     uri: &Uri,
     body: &[u8],
 ) -> Result<DeviceRecord, Response> {
+    authorize_signed_request(store, headers, uri, "POST", body).await
+}
+
+pub(crate) async fn authorize_signed_request(
+    store: &AuthStore,
+    headers: &HeaderMap,
+    uri: &Uri,
+    method: &str,
+    body: &[u8],
+) -> Result<DeviceRecord, Response> {
     let Some((id, secret)) = presented_credential(headers) else {
         return Err(error(StatusCode::UNAUTHORIZED, "credential_invalid"));
     };
@@ -102,7 +112,7 @@ pub(crate) async fn authorize_signed_device(
     let signature = required_header(headers, "x-codelocal-signature").unwrap_or("");
     let path = uri.path_and_query().map_or(uri.path(), |v| v.as_str());
     let proof = DeviceProof {
-        method: "POST",
+        method,
         request_uri: path,
         timestamp,
         nonce,
@@ -186,24 +196,45 @@ pub async fn catalog(State(config): State<AuthConfig>, headers: HeaderMap) -> Re
         Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "workspaces_unavailable"),
     };
     let total = rows.len();
-    let items = rows
-        .into_iter()
-        .map(|w| {
-            json!({
-                "deviceId": w.device_id,
-                "deviceName": w.device_name,
-                "workspaceId": w.workspace_id,
-                "workspaceName": w.workspace_name,
-                "systemApp": w.system_app,
-                "managed": w.managed,
-                "status": "offline",
-                "runtimeOnline": false,
-                "lastSeenAt": w.last_seen_at,
-            })
-        })
-        .collect::<Vec<_>>();
+    let mut active = 0;
+    let mut items = Vec::with_capacity(total);
+    let mut presence_cache = std::collections::HashMap::new();
+    for w in rows {
+        let presence = if let Some(cached) = presence_cache.get(&w.credential_id) {
+            cached
+        } else {
+            let fetched = match store.runtime_presence(&w.credential_id).await {
+                Ok(presence) => presence,
+                Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "presence_unavailable"),
+            };
+            presence_cache.insert(w.credential_id.clone(), fetched);
+            presence_cache
+                .get(&w.credential_id)
+                .expect("presence just inserted")
+        };
+        let runtime_online =
+            presence
+                .as_ref()
+                .is_some_and(|lease: &crate::store::RuntimePresence| {
+                    lease.workspace_ids.iter().any(|id| id == &w.workspace_id)
+                });
+        if runtime_online {
+            active += 1;
+        }
+        items.push(json!({
+            "deviceId": w.device_id,
+            "deviceName": w.device_name,
+            "workspaceId": w.workspace_id,
+            "workspaceName": w.workspace_name,
+            "systemApp": w.system_app,
+            "managed": w.managed,
+            "status": if runtime_online { "active" } else { "offline" },
+            "runtimeOnline": runtime_online,
+            "lastSeenAt": w.last_seen_at,
+        }));
+    }
     Json(json!({
-        "summary": {"total":total, "active":0, "sleeping":0, "offline":total},
+        "summary": {"total":total, "active":active, "sleeping":0, "offline":total-active},
         "items": items
     }))
     .into_response()

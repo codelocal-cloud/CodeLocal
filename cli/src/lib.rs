@@ -2,4 +2,5 @@
 pub mod localfs;
 pub mod mcp;
 pub mod pair;
+pub mod runtime;
 pub mod workspace;
