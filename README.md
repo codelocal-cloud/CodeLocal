@@ -7,7 +7,7 @@ This `beta` branch preserves the exact CodeLocal Next.js 16 / React 19 frontend 
 | Component | Result |
 | --- | --- |
 | `web/` | Original 52 Next.js page routes and UI preserved; full web check/build passes |
-| `cli/` | Rust beta registry + Ed25519 device pairing (`login`), signed workspace metadata sync (`sync`) and signed credential revocation (`logout`); no remote host execution |
+| `cli/` | Rust beta registry, Ed25519 pairing, signed workspace sync/logout, and local-only bounded file info/read/range/batch inside granted workspaces; no remote host execution |
 | `backend/` | Rust beta auth/session/OTP/password reset, device pairing and revocation, signed Ed25519 workspace sync with Redis anti-replay, and account-scoped workspace catalog. **Real-store end-to-end testing pending** |
 | `backend/src/device_signing.rs` | Go-compatible Ed25519 verifier now enforced for workspace metadata sync, with Redis nonce replay protection; no privileged file/terminal/MCP endpoint |
 | `backend/compose.beta.yml` | Isolated loopback PostgreSQL+Redis test stack (Docker daemon must be running) |
@@ -44,6 +44,8 @@ CODELOCAL_BACKEND_URL=http://127.0.0.1:8080 npm run dev --prefix web -- --port 3
 CODELOCAL_BETA_API_URL=http://127.0.0.1:8080 cargo run -p codelocal -- login
 cargo run -p codelocal -- status
 cargo run -p codelocal -- grant ./cli
+cargo run -p codelocal -- workspaces # copy the workspace ID
+cargo run -p codelocal -- local-read <workspace-id> src/lib.rs 1 10
 cargo run -p codelocal -- sync  # signed metadata only; no paths or remote host execution
 # When testing is finished: cargo run -p codelocal -- logout
 ```
@@ -71,4 +73,4 @@ Device pairing still does not enable privileged local operations. The signed req
 
 ## Release safety
 
-Do not modify or deploy the frozen Go archive. Do not merge into `main`, deploy to Railway, publish npm CLI, migrate existing credentials, or use production database snapshots until the full compatibility and security gates pass. Consult [feature parity plan](docs/architecture/FEATURE_PARITY_PLAN.md), [architecture](docs/architecture/MIGRATION.md), [Phase 1–2 progress](docs/architecture/IMPLEMENTATION_PROGRESS.md) and [Phase 3 auth/devices report](docs/architecture/PHASE3_AUTH_DEVICES.md) and [Phase 4 signed workspaces](docs/architecture/PHASE4_SIGNED_WORKSPACES.md).
+Do not modify or deploy the frozen Go archive. Do not merge into `main`, deploy to Railway, publish npm CLI, migrate existing credentials, or use production database snapshots until the full compatibility and security gates pass. Consult [feature parity plan](docs/architecture/FEATURE_PARITY_PLAN.md), [architecture](docs/architecture/MIGRATION.md), [Phase 1–2 progress](docs/architecture/IMPLEMENTATION_PROGRESS.md) and [Phase 3 auth/devices report](docs/architecture/PHASE3_AUTH_DEVICES.md) and [Phase 4 signed workspaces](docs/architecture/PHASE4_SIGNED_WORKSPACES.md) and [Phase 5 local file reads](docs/architecture/PHASE5_LOCAL_READ.md).

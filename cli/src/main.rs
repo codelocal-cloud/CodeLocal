@@ -1,6 +1,6 @@
 //! Rust CLI migration, initially workspace registry commands only.
 //! CLI beta does not touch the legacy Go runtime state or claim device pairing readiness.
-use codelocal::workspace::Registry;
+use codelocal::{localfs::LocalReader, workspace::Registry};
 use serde_json::json;
 use std::{env, path::Path, process::ExitCode};
 
@@ -22,6 +22,10 @@ Available in isolated Rust beta:
   codelocal login --force            Re-pair and replace saved beta credential
   codelocal sync                     Sync signed workspace metadata to beta cloud
   codelocal logout                   Signed beta credential revoke + local sign-out
+  codelocal local-info <id> <file>   Inspect local file metadata inside a granted workspace
+  codelocal local-read <id> <file>   Read bounded local text (no network)
+  codelocal local-read <id> <file> <from> <to>   Read a bounded line range
+  codelocal local-read-many <id> <file...>      Read up to 20 local files
 
 Not yet migrated from Go (will fail explicitly):
   codelocal switch-account
@@ -54,7 +58,7 @@ fn run(args: &[String]) -> Result<(), String> {
             let registry = Registry::beta_default().map_err(|error| error.to_string())?;
             let ws = registry.grant(path).map_err(|error| error.to_string())?;
             println!("✓ Workspace added: {}\n  ID: {}\n  Path: {}", ws.workspace_name, ws.workspace_id, ws.local_path.display());
-            println!("Rust beta authorization stored locally only; runtime sync is not yet implemented.");
+            println!("Beta grant saved locally. Run `codelocal sync` to sync metadata; remote runtime is not yet implemented.");
             Ok(())
         }
         "ungrant" | "remove" if args.len() == 2 => {
@@ -89,10 +93,37 @@ fn run(args: &[String]) -> Result<(), String> {
                 "runtime": "not_implemented",
                 "pairing": if codelocal::pair::local_status()? { "paired_locally" } else { "not_paired" },
                 "mcp": "not_implemented",
+                "localRead": "granted_only_manual",
                 "workspaceSync": "manual_signed_metadata",
                 "legacyStateModified": false
             });
             println!("{}", serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?);
+            Ok(())
+        }
+        "local-info" if args.len() == 3 => {
+            let registry = Registry::beta_default().map_err(|err| err.to_string())?;
+            let reader = LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let info = reader.info(&args[2]).map_err(|err| err.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&info).map_err(|err| err.to_string())?);
+            Ok(())
+        }
+        "local-read" if args.len() == 3 || args.len() == 5 => {
+            let registry = Registry::beta_default().map_err(|err| err.to_string())?;
+            let reader = LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let (from, to) = if args.len() == 5 {
+                let from = args[3].parse::<usize>().map_err(|_| "invalid start line number")?;
+                let to = args[4].parse::<usize>().map_err(|_| "invalid end line number")?;
+                (Some(from), Some(to))
+            } else { (None, None) };
+            let file = reader.read(&args[2], from, to).map_err(|err| err.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&file).map_err(|err| err.to_string())?);
+            Ok(())
+        }
+        "local-read-many" if args.len() >= 3 && args.len() <= 22 => {
+            let registry = Registry::beta_default().map_err(|err| err.to_string())?;
+            let reader = LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let result = reader.many(&args[2..]).map_err(|err| err.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?);
             Ok(())
         }
         "sync" if args.len() == 1 => codelocal::pair::sync(),
@@ -108,7 +139,7 @@ fn run(args: &[String]) -> Result<(), String> {
             let registry = Registry::beta_default().map_err(|error| error.to_string())?;
             let ws = registry.grant(other).map_err(|error| error.to_string())?;
             println!("✓ Workspace added: {}\n  ID: {}\n  Path: {}", ws.workspace_name, ws.workspace_id, ws.local_path.display());
-            println!("Rust beta authorization stored locally only; runtime sync is not yet implemented.");
+            println!("Beta grant saved locally. Run `codelocal sync` to sync metadata; remote runtime is not yet implemented.");
             Ok(())
         }
         other => Err(format!("invalid or unavailable CodeLocal Rust beta command: {other} (run --help)")),

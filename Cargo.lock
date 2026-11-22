@@ -223,6 +223,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hex",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.10.9",

@@ -302,7 +302,7 @@ pub fn id_for_path(path: &Path) -> String {
     format!("{slug}-{short_hash}")
 }
 
-fn validate_workspace_path(path: &Path) -> Result<()> {
+pub(crate) fn validate_workspace_path(path: &Path) -> Result<()> {
     let home = env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
         .and_then(|home| fs::canonicalize(home).ok());
