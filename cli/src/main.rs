@@ -28,6 +28,7 @@ Available in isolated Rust beta:
   codelocal local-read-many <id> <file...>      Read up to 20 local files
   codelocal local-search-files <id> <query> [limit]   Find names with .gitignore
   codelocal local-search-text <id> <text> [limit]    Find fixed text in files
+  codelocal local-edit <id> <file> <sha256> <old> <new> [--all]   Hash-safe local edit
 
 Not yet migrated from Go (will fail explicitly):
   codelocal switch-account
@@ -145,6 +146,16 @@ fn run(args: &[String]) -> Result<(), String> {
                     .map_err(|err| err.to_string())?).map_err(|err| err.to_string())?
             };
             println!("{}", serde_json::to_string_pretty(&value).map_err(|err| err.to_string())?);
+            Ok(())
+        }
+        "local-edit" if args.len() == 6 || args.len() == 7 && args[6] == "--all" => {
+            let registry = Registry::beta_default().map_err(|err| err.to_string())?;
+            let reader = LocalReader::from_registry(&registry, &args[1])
+                .map_err(|err| err.to_string())?;
+            let result = reader.edit_exact(
+                &args[2], &args[3], &args[4], &args[5], args.len() == 7
+            ).map_err(|err| err.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?);
             Ok(())
         }
         "sync" if args.len() == 1 => codelocal::pair::sync(),
