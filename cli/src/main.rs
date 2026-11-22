@@ -26,6 +26,8 @@ Available in isolated Rust beta:
   codelocal local-read <id> <file>   Read bounded local text (no network)
   codelocal local-read <id> <file> <from> <to>   Read a bounded line range
   codelocal local-read-many <id> <file...>      Read up to 20 local files
+  codelocal local-search-files <id> <query> [limit]   Find names with .gitignore
+  codelocal local-search-text <id> <text> [limit]    Find fixed text in files
 
 Not yet migrated from Go (will fail explicitly):
   codelocal switch-account
@@ -124,6 +126,25 @@ fn run(args: &[String]) -> Result<(), String> {
             let reader = LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
             let result = reader.many(&args[2..]).map_err(|err| err.to_string())?;
             println!("{}", serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?);
+            Ok(())
+        }
+        "local-search-files" | "local-search-text" if args.len() == 3 || args.len() == 4 => {
+            let registry = Registry::beta_default().map_err(|err| err.to_string())?;
+            let reader = LocalReader::from_registry(&registry, &args[1])
+                .map_err(|err| err.to_string())?;
+            let limit = if let Some(raw) = args.get(3) {
+                raw.parse::<usize>().map_err(|_| "invalid result limit")?
+            } else {
+                100
+            };
+            let value = if command == "local-search-files" {
+                serde_json::to_value(reader.search_files(&args[2], limit)
+                    .map_err(|err| err.to_string())?).map_err(|err| err.to_string())?
+            } else {
+                serde_json::to_value(reader.search_text(&args[2], limit)
+                    .map_err(|err| err.to_string())?).map_err(|err| err.to_string())?
+            };
+            println!("{}", serde_json::to_string_pretty(&value).map_err(|err| err.to_string())?);
             Ok(())
         }
         "sync" if args.len() == 1 => codelocal::pair::sync(),

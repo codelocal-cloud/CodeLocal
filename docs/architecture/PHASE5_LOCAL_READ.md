@@ -45,7 +45,7 @@ CODELOCAL_BETA_STATE_DIR=target/localread-example cargo run -p codelocal -- loca
 
 ## Outstanding before complete Go parity
 
-- Git ignore matching, directory listings and recursive bounded `search files/text`, advanced read concurrency and file change/snapshot semantics.
+- Git ignore matching and bounded fixed-string search files/text are implemented in Phase 6 (`PHASE6_LOCAL_SEARCH.md`); directory listings, regex search, advanced read concurrency and file change/snapshot semantics remain open.
 - Filesystem editing, hash-safe writes, patch/apply, source formatters, approvals and audit.
 - Windows race-free equivalent of Unix descriptor traversal.
 - CLI local runtime/service and signed MCP remote read routing; **the local-only commands are not connected to the Cloud API**.

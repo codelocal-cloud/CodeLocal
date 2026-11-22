@@ -1,6 +1,9 @@
 //! Beta-only local file inspection engine for the eventual compact MCP "read" tool.
 //! There is intentionally no network handler or process execution entrypoint here.
 //! All access requires a local workspace grant and is read-only.
+mod search;
+pub use search::{FileSearch, TextSearch};
+
 use crate::workspace::{Registry, Workspace, id_for_path, validate_workspace_path};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
