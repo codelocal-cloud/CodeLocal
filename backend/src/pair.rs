@@ -108,7 +108,7 @@ pub async fn start(State(config): State<AuthConfig>, Json(input): Json<StartPair
         "expiresAt": pair.expires_at,
         "approveUrl": format!("{base}/pair/approve?pairingId={}", pair.pairing_id),
         "retrySafeClaim": true,
-        "deviceSigning": false
+        "deviceSigning": true
     }))
     .into_response()
 }

@@ -187,6 +187,19 @@ impl AuthStore {
                 "beta device tables missing; apply reviewed 002_beta_devices.sql",
             ));
         }
+        let workspace_ready: bool = client
+            .query_one(
+                "SELECT to_regclass('codelocal_workspaces') IS NOT NULL",
+                &[],
+            )
+            .await
+            .map_err(|_| unavailable("beta workspace schema check failed"))?
+            .get(0);
+        if !workspace_ready {
+            return Err(unavailable(
+                "beta workspace tables missing; apply 003_beta_workspaces.sql",
+            ));
+        }
         let mut conn = self
             .redis
             .get_multiplexed_async_connection()
@@ -395,6 +408,7 @@ pub fn now_millis() -> i64 {
 // Auth flow operations share the same store, credentials, and isolation checks.
 include!("store_auth_flows.rs");
 include!("store_devices.rs");
+include!("store_workspaces.rs");
 
 #[cfg(test)]
 mod tests {
@@ -584,6 +598,102 @@ mod tests {
         assert_eq!(account["email"], email);
         assert_eq!(account["csrf"], token);
         assert_eq!(account["userId"], user_id);
+
+        // Real-store beta device + signed-workspace persistence gates.
+        let pair = store
+            .create_pairing(&format!("test-device-{suffix}"), "Test Mac", "123456")
+            .await
+            .unwrap();
+        assert!(
+            store
+                .approve_pairing(&pair.pairing_id, "000000", &user_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            store
+                .approve_pairing(&pair.pairing_id, "123456", &user_id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let credential_id = format!("cld_{suffix}");
+        let secret_hash = hex::encode(Sha256::digest(b"beta-integration-credential"));
+        let signing = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
+        use base64::Engine;
+        let public_key = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(signing.verifying_key().as_bytes());
+        let device = store
+            .claim_pairing(
+                &pair.pairing_id,
+                "123456",
+                &credential_id,
+                &secret_hash,
+                Some(&public_key),
+            )
+            .await
+            .unwrap()
+            .expect("approved pair claim");
+        assert!(
+            store
+                .claim_pairing(
+                    &pair.pairing_id,
+                    "123456",
+                    &credential_id,
+                    &secret_hash,
+                    Some(&public_key)
+                )
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            store
+                .authenticate_device(&credential_id, &secret_hash)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let ws = WorkspaceMetadata {
+            workspace_id: "my-beta-workspace".into(),
+            workspace_name: "Beta Repo".into(),
+            managed: false,
+            system_app: false,
+        };
+        assert_eq!(store.sync_workspaces(&device, &[ws]).await.unwrap(), 0);
+        assert_eq!(
+            store.list_workspace_catalog(&user_id).await.unwrap().len(),
+            1
+        );
+        assert_eq!(store.sync_workspaces(&device, &[]).await.unwrap(), 1);
+        assert!(
+            store
+                .list_workspace_catalog(&user_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            store
+                .consume_device_nonce(&credential_id, "fresh-nonce-value")
+                .await
+                .unwrap()
+        );
+        assert!(
+            !store
+                .consume_device_nonce(&credential_id, "fresh-nonce-value")
+                .await
+                .unwrap()
+        );
+        assert!(store.revoke_device(&user_id, &credential_id).await.unwrap());
+        assert!(
+            store
+                .authenticate_device(&credential_id, &secret_hash)
+                .await
+                .unwrap()
+                .is_none()
+        );
 
         let logout_form = form_urlencoded::Serializer::new(String::new())
             .append_pair("csrf", &token)

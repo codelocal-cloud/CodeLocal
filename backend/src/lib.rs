@@ -14,6 +14,7 @@ mod password_reset;
 mod public_url;
 mod signup;
 mod store;
+mod workspaces;
 
 use axum::{Json, Router, routing::get};
 use serde::{Deserialize, Serialize};
@@ -84,12 +85,17 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
             axum::routing::post(pair::auth_check),
         )
         .route("/api/v1/devices", get(devices::list))
+        .route("/api/v1/workspaces", get(workspaces::catalog))
+        .route(
+            "/api/client/workspaces/sync",
+            axum::routing::post(workspaces::sync),
+        )
         .route(
             "/api/v1/devices/{device_id}/revoke",
             axum::routing::post(devices::revoke),
         )
         .route("/logout", axum::routing::post(auth_session::logout))
-        .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
+        .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))
         .with_state(config)
 }
 
@@ -147,12 +153,7 @@ mod tests {
     #[tokio::test]
     async fn unimplemented_legacy_routes_return_not_found() {
         let response = router()
-            .oneshot(
-                Request::builder()
-                    .uri("/api/v1/workspaces")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/mcp").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);

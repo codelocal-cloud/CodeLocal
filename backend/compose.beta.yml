@@ -15,6 +15,7 @@ services:
       - rust_beta_postgres:/var/lib/postgresql/data
       - ./migrations/001_beta_auth.sql:/docker-entrypoint-initdb.d/001_beta_auth.sql:ro
       - ./migrations/002_beta_devices.sql:/docker-entrypoint-initdb.d/002_beta_devices.sql:ro
+      - ./migrations/003_beta_workspaces.sql:/docker-entrypoint-initdb.d/003_beta_workspaces.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U codelocal_beta -d codelocal_beta"]
       interval: 3s

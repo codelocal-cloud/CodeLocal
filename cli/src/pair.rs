@@ -1,6 +1,8 @@
 //! Native Rust beta pairing flow. Uses only beta-specific state and API URL.
 //! Does not claim that local daemon / remote MCP execution is implemented.
 use crate::workspace::Registry;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use ed25519_dalek::{Signer, SigningKey};
 use fs2::FileExt;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -27,6 +29,10 @@ pub struct Credential {
     email: Option<String>,
     server_url: String,
     created_at: u64,
+    #[serde(default)]
+    device_public_key: String,
+    #[serde(default)]
+    device_private_key: String,
 }
 
 #[derive(Deserialize)]
@@ -312,10 +318,8 @@ pub fn login(force: bool) -> Result<(), String> {
         .json()
         .map_err(|_| "invalid pairing start response")?;
     validate_approval_url(&pair.approve_url)?;
-    if pair.device_signing {
-        // Future signed native client must generate + store Ed25519 private key.
-        // Never pretend to satisfy this without cryptographic keys.
-        return Err("beta CLI does not yet implement signed device keypair provisioning".into());
+    if !pair.device_signing {
+        return Err("beta API must require Ed25519 device signing".into());
     }
     if !pair.retry_safe_claim {
         return Err("beta server did not support retry-safe claims".into());
@@ -324,6 +328,11 @@ pub fn login(force: bool) -> Result<(), String> {
         return Err("invalid pairing ID/code from beta server".into());
     }
 
+    let mut signing_seed = [0u8; 32];
+    getrandom::fill(&mut signing_seed).map_err(|_| "secure key generation failed")?;
+    let signing_key = SigningKey::from_bytes(&signing_seed);
+    let device_public_key = URL_SAFE_NO_PAD.encode(signing_key.verifying_key().as_bytes());
+    let device_private_key = URL_SAFE_NO_PAD.encode(signing_seed);
     let credential_id = format!("cld_{}", random_hex(16)?);
     let credential_secret = random_hex(40)?;
     let hash = hex::encode(Sha256::digest(credential_secret.as_bytes()));
@@ -332,6 +341,7 @@ pub fn login(force: bool) -> Result<(), String> {
         "code":pair.code,
         "credentialId":credential_id,
         "credentialSecretHash":hash,
+        "devicePublicKey":device_public_key,
     });
     println!("Approve this Rust beta device in your browser.");
     println!("Pairing code: {}", pair.code);
@@ -365,6 +375,8 @@ pub fn login(force: bool) -> Result<(), String> {
                 email: claimed.email,
                 server_url: origin,
                 created_at: now_millis(),
+                device_public_key,
+                device_private_key,
             };
             if !check_existing(&client, &credential.server_url, &credential)? {
                 return Err("server has not validated newly claimed beta credential".into());
@@ -384,6 +396,102 @@ pub fn login(force: bool) -> Result<(), String> {
 pub fn local_status() -> Result<bool, String> {
     let registry = Registry::beta_default().map_err(|e| e.to_string())?;
     Ok(load_credential(registry.state_dir())?.is_some())
+}
+
+fn canonical_device_request(
+    method: &str,
+    path: &str,
+    timestamp: u64,
+    nonce: &str,
+    body: &[u8],
+) -> Vec<u8> {
+    let digest = hex::encode(Sha256::digest(body));
+    format!(
+        "{}\n{path}\n{timestamp}\n{nonce}\n{digest}",
+        method.to_ascii_uppercase()
+    )
+    .into_bytes()
+}
+
+/// Push only beta workspace IDs/names, never machine filesystem paths.
+pub fn sync() -> Result<(), String> {
+    let registry = Registry::beta_default().map_err(|e| e.to_string())?;
+    let origin = beta_url()?;
+    let c =
+        load_credential(registry.state_dir())?.ok_or("no paired beta device; run login first")?;
+    if c.server_url != origin {
+        return Err("saved credential belongs to another beta API".into());
+    }
+    let seed_raw = URL_SAFE_NO_PAD
+        .decode(&c.device_private_key)
+        .map_err(|_| "beta device lacks signing key; re-pair with login --force")?;
+    let seed: [u8; 32] = seed_raw
+        .try_into()
+        .map_err(|_| "invalid signing key; re-pair with login --force")?;
+    let signing_key = SigningKey::from_bytes(&seed);
+    if URL_SAFE_NO_PAD.encode(signing_key.verifying_key().as_bytes()) != c.device_public_key {
+        return Err("beta public/private signing keys do not match".into());
+    }
+    let workspaces = registry.list().map_err(|e| e.to_string())?;
+    if workspaces.len() > 100 {
+        return Err("beta workspace sync supports at most 100 grants".into());
+    }
+    let catalog: Vec<_> = workspaces
+        .iter()
+        .map(|w| {
+            json!({
+                "workspaceId":w.workspace_id,
+                "workspaceName":w.workspace_name,
+                "managed":false,
+                "systemApp":false
+            })
+        })
+        .collect();
+    let payload = serde_json::to_vec(&json!({
+        "clientVersion": env!("CARGO_PKG_VERSION"),
+        "workspaces": catalog
+    }))
+    .map_err(|_| "could not serialize beta workspaces")?;
+    const PATH: &str = "/api/client/workspaces/sync";
+    let mut nonce_bytes = [0u8; 18];
+    getrandom::fill(&mut nonce_bytes).map_err(|_| "secure nonce generation failed")?;
+    let nonce = URL_SAFE_NO_PAD.encode(nonce_bytes);
+    let timestamp = now_millis() / 1000;
+    let canonical = canonical_device_request("POST", PATH, timestamp, &nonce, &payload);
+    let signature = URL_SAFE_NO_PAD.encode(signing_key.sign(&canonical).to_bytes());
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|_| "unable to initialize beta HTTP client")?;
+    let resp = client
+        .post(format!("{origin}{PATH}"))
+        .header("Content-Type", "application/json")
+        .header("X-CodeLocal-Credential-Id", &c.credential_id)
+        .header("Authorization", format!("Device {}", c.credential_secret))
+        .header("X-CodeLocal-Signature-Timestamp", timestamp.to_string())
+        .header("X-CodeLocal-Signature-Nonce", nonce)
+        .header("X-CodeLocal-Signature", signature)
+        .body(payload)
+        .send()
+        .map_err(|_| "beta workspace sync could not reach server")?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "signed beta workspace sync failed ({})",
+            resp.status()
+        ));
+    }
+    let result: serde_json::Value = resp
+        .json()
+        .map_err(|_| "invalid signed beta workspace sync response")?;
+    if result["synced"].as_u64() != Some(workspaces.len() as u64) {
+        return Err("server acknowledged unexpected workspace count".into());
+    }
+    println!(
+        "Synced {} beta workspace metadata records; paths remain local.",
+        workspaces.len()
+    );
+    println!("Cloud metadata only; runtime execution remains disabled.");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -416,6 +524,8 @@ mod tests {
             email: None,
             server_url: "http://127.0.0.1:8080".into(),
             created_at: 1,
+            device_public_key: String::new(),
+            device_private_key: String::new(),
         };
         save_credential(dir.path(), &credential).unwrap();
         assert!(load_credential(dir.path()).unwrap().is_some());
@@ -425,6 +535,34 @@ mod tests {
             let metadata = fs::metadata(dir.path().join("credential.json")).unwrap();
             assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
         }
+    }
+
+    #[test]
+    fn cli_ed25519_signature_uses_go_compatible_canonical_format() {
+        use ed25519_dalek::Verifier;
+        let signing = SigningKey::from_bytes(&[13u8; 32]);
+        let nonce = URL_SAFE_NO_PAD.encode([42u8; 18]);
+        let body = br#"{"hello":"world"}"#;
+        let message = canonical_device_request(
+            "POST",
+            "/api/client/workspaces/sync",
+            1_700_000_000,
+            &nonce,
+            body,
+        );
+        let digest = hex::encode(Sha256::digest(body));
+        let expected = format!("POST\n/api/client/workspaces/sync\n1700000000\n{nonce}\n{digest}");
+        assert_eq!(message, expected.as_bytes());
+        let sig = signing.sign(&message);
+        assert!(signing.verifying_key().verify(&message, &sig).is_ok());
+        let tampered = canonical_device_request(
+            "POST",
+            "/api/client/workspaces/sync",
+            1_700_000_000,
+            &nonce,
+            br#"{"hello":"altered"}"#,
+        );
+        assert!(signing.verifying_key().verify(&tampered, &sig).is_err());
     }
 
     #[cfg(unix)]

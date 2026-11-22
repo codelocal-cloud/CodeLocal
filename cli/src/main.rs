@@ -20,6 +20,7 @@ Available in isolated Rust beta:
   codelocal status                   Show beta migration readiness
   codelocal login|pair               Start beta device pairing via browser approval
   codelocal login --force            Re-pair and replace saved beta credential
+  codelocal sync                     Sync signed workspace metadata to beta cloud
 
 Not yet migrated from Go (will fail explicitly):
   codelocal logout|switch-account
@@ -33,7 +34,7 @@ Environment:
                                      Default: ~/.codelocal-beta
 
 IMPORTANT: This is NOT the production CodeLocal client.
-Pairing can create a local credential, but cloud sync, MCP and privileged execution are NOT available yet.
+Signed manual workspace metadata sync is available. WebSocket runtime, MCP and privileged remote execution are NOT available yet.
 "#;
 
 fn run(args: &[String]) -> Result<(), String> {
@@ -87,11 +88,13 @@ fn run(args: &[String]) -> Result<(), String> {
                 "runtime": "not_implemented",
                 "pairing": if codelocal::pair::local_status()? { "paired_locally" } else { "not_paired" },
                 "mcp": "not_implemented",
+                "workspaceSync": "manual_signed_metadata",
                 "legacyStateModified": false
             });
             println!("{}", serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?);
             Ok(())
         }
+        "sync" if args.len() == 1 => codelocal::pair::sync(),
         "login" | "pair" if args.len() == 1 => codelocal::pair::login(false),
         "login" | "pair" if args.len() == 2 && args[1] == "--force" => codelocal::pair::login(true),
         "" => Err("CodeLocal Rust device runtime is not implemented yet; run --help for available beta commands".into()),
