@@ -5,7 +5,7 @@ mod edit;
 mod index;
 mod search;
 pub use edit::EditResult;
-pub use index::SourceIndex;
+pub use index::{DependencyMap, SourceIndex, SymbolSearch};
 pub use search::{FileSearch, ProjectMap, TextSearch};
 
 use crate::workspace::{Registry, Workspace, id_for_path, validate_workspace_path};

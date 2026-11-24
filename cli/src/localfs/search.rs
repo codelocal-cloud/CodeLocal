@@ -8,8 +8,8 @@ use ignore::{DirEntry, WalkBuilder};
 use serde::Serialize;
 use std::{collections::BTreeMap, path::Path, str};
 
-const MAX_WALK_ENTRIES: usize = 10_000;
-const MAX_WALK_DEPTH: usize = 24;
+pub(super) const MAX_WALK_ENTRIES: usize = 10_000;
+pub(super) const MAX_WALK_DEPTH: usize = 24;
 const MAX_RESULTS: usize = 200;
 const MAX_TEXT_SCAN_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -319,7 +319,7 @@ impl LocalReader {
         })
     }
 
-    fn relative_name(&self, entry: &DirEntry) -> Result<String> {
+    pub(super) fn relative_name(&self, entry: &DirEntry) -> Result<String> {
         let relative = entry
             .path()
             .strip_prefix(&self.root)
@@ -329,7 +329,9 @@ impl LocalReader {
         Ok(segments.join("/"))
     }
 
-    fn walk(&self) -> impl Iterator<Item = std::result::Result<DirEntry, ignore::Error>> + '_ {
+    pub(super) fn walk(
+        &self,
+    ) -> impl Iterator<Item = std::result::Result<DirEntry, ignore::Error>> + '_ {
         let root = self.root.clone();
         let mut builder = WalkBuilder::new(&root);
         builder
