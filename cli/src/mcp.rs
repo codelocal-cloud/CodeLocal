@@ -44,6 +44,21 @@ struct SearchInput {
     max_results: Option<usize>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SymbolInput {
+    workspace_id: String,
+    query: String,
+    max_results: Option<usize>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DependencyInput {
+    workspace_id: String,
+    max_results: Option<usize>,
+}
+
 fn catalog() -> Value {
     json!([
         {
@@ -56,6 +71,23 @@ fn catalog() -> Value {
             "name":"codelocal_project_map",
             "description":"Scan a granted workspace for bounded project structure, language counts, manifest and entrypoint paths after human approval; no file contents",
             "inputSchema":{"type":"object","properties":{"workspaceId":{"type":"string"}},
+                "required":["workspaceId"],"additionalProperties":false},
+            "annotations":{"readOnlyHint":true}
+        },
+        {
+            "name":"codelocal_symbol_search",
+            "description":"Find exact ASCII declaration names in a bounded lexical workspace scan after human approval; not semantic LSP results",
+            "inputSchema":{"type":"object","properties":{
+                "workspaceId":{"type":"string"},"query":{"type":"string","minLength":1,"maxLength":128},
+                "maxResults":{"type":"integer","minimum":1,"maximum":200}},
+                "required":["workspaceId","query"],"additionalProperties":false},
+            "annotations":{"readOnlyHint":true}
+        },
+        {
+            "name":"codelocal_dependency_map",
+            "description":"Return bounded lexical import candidates after human approval; only JS/TS relative paths resolve to candidates, not compiler-proven dependencies",
+            "inputSchema":{"type":"object","properties":{
+                "workspaceId":{"type":"string"},"maxResults":{"type":"integer","minimum":1,"maximum":200}},
                 "required":["workspaceId"],"additionalProperties":false},
             "annotations":{"readOnlyHint":true}
         },
@@ -146,6 +178,30 @@ fn call(name: &str, arguments: Value, registry: &Registry) -> Result<Value, Stri
                 .map_err(|err| err.to_string())?;
             serde_json::to_value(reader.project_map().map_err(|err| err.to_string())?)
                 .map_err(|_| "could not serialize project map".into())
+        }
+        "codelocal_symbol_search" => {
+            let input: SymbolInput =
+                serde_json::from_value(arguments).map_err(|_| "invalid symbol search arguments")?;
+            let reader = LocalReader::from_registry(registry, &input.workspace_id)
+                .map_err(|err| err.to_string())?;
+            serde_json::to_value(
+                reader
+                    .find_symbols(&input.query, input.max_results.unwrap_or(100))
+                    .map_err(|err| err.to_string())?,
+            )
+            .map_err(|_| "could not serialize symbol matches".into())
+        }
+        "codelocal_dependency_map" => {
+            let input: DependencyInput = serde_json::from_value(arguments)
+                .map_err(|_| "invalid dependency map arguments")?;
+            let reader = LocalReader::from_registry(registry, &input.workspace_id)
+                .map_err(|err| err.to_string())?;
+            serde_json::to_value(
+                reader
+                    .dependency_map(input.max_results.unwrap_or(100))
+                    .map_err(|err| err.to_string())?,
+            )
+            .map_err(|_| "could not serialize dependency candidates".into())
         }
         "codelocal_local_info" | "codelocal_local_read" => {
             let input: ReadInput =
@@ -277,6 +333,8 @@ fn gated_call(
             | "codelocal_local_read_many"
             | "codelocal_local_search"
             | "codelocal_project_map"
+            | "codelocal_symbol_search"
+            | "codelocal_dependency_map"
     ) {
         return Err("unknown or disabled local MCP tool".into());
     }
@@ -382,7 +440,9 @@ mod tests {
             .iter()
             .map(|v| v["name"].as_str().unwrap())
             .collect::<Vec<_>>();
-        assert_eq!(names.len(), 6);
+        assert_eq!(names.len(), 8);
+        assert!(names.contains(&"codelocal_symbol_search"));
+        assert!(names.contains(&"codelocal_dependency_map"));
         assert!(
             !names
                 .iter()
@@ -492,6 +552,57 @@ mod tests {
             dispatch(&request, &registry).unwrap()["result"]["isError"],
             true
         );
+    }
+
+    #[test]
+    fn index_tools_require_exact_one_use_approval() {
+        let (temp, registry, id) = setup();
+        let project = temp.path().join("project");
+        fs::write(project.join("main.rs"), "pub fn example() {}\n").unwrap();
+        fs::write(project.join("app.ts"), "import { value } from './dep';\n").unwrap();
+        fs::write(project.join("dep.ts"), "export const value = 1;\n").unwrap();
+        fs::write(project.join(".env"), "TOKEN=hidden\n").unwrap();
+        let approvals = ApprovalStore::new(registry.state_dir());
+        for (name, args, expected) in [
+            (
+                "codelocal_symbol_search",
+                json!({"workspaceId":id,"query":"example","maxResults":5}),
+                "main.rs",
+            ),
+            (
+                "codelocal_dependency_map",
+                json!({"workspaceId":id,"maxResults":5}),
+                "dep.ts",
+            ),
+        ] {
+            let mut request = json!({"jsonrpc":"2.0","id":1,"method":"tools/call",
+                "params":{"name":name,"arguments":args}});
+            let pending = dispatch(&request, &registry).unwrap();
+            let details: Value =
+                serde_json::from_str(pending["result"]["content"][0]["text"].as_str().unwrap())
+                    .unwrap();
+            assert_eq!(details["status"], "approval_required");
+            assert_eq!(details["executionStarted"], false);
+            assert!(!pending.to_string().contains(expected));
+            let ticket = details["approvalId"].as_str().unwrap();
+            assert!(approvals.decide(ticket, true).unwrap());
+            request["params"]["approvalId"] = json!(ticket);
+            let mut altered = request.clone();
+            altered["params"]["arguments"]["maxResults"] = json!(6);
+            assert_eq!(
+                dispatch(&altered, &registry).unwrap()["result"]["isError"],
+                true
+            );
+            let approved = dispatch(&request, &registry).unwrap();
+            assert_eq!(approved["result"]["isError"], false);
+            assert!(approved.to_string().contains(expected));
+            assert!(!approved.to_string().contains("TOKEN=hidden"));
+            assert!(!approved.to_string().contains(".env"));
+            assert_eq!(
+                dispatch(&request, &registry).unwrap()["result"]["isError"],
+                true
+            );
+        }
     }
 
     #[test]

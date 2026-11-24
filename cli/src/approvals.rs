@@ -286,6 +286,8 @@ impl ApprovalStore {
                 | "codelocal_local_search"
                 | "codelocal_local_read_many"
                 | "codelocal_project_map"
+                | "codelocal_symbol_search"
+                | "codelocal_dependency_map"
         ) {
             return Err("unknown or unapprovable MCP tool".into());
         }
