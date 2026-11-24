@@ -431,6 +431,31 @@ include!("store_usage.rs");
 mod tests {
     use super::*;
 
+    async fn integration_overview(app: &axum::Router, cookies: &str) -> serde_json::Value {
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode, header},
+        };
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/dashboard/overview")
+                    .header(header::COOKIE, cookies)
+                    .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
     fn sample_user() -> User {
         User {
             id: "user1".into(),
@@ -632,6 +657,15 @@ mod tests {
         assert_eq!(account["email"], email);
         assert_eq!(account["csrf"], token);
         assert_eq!(account["userId"], user_id);
+        let no_devices = integration_overview(&app, &combined).await;
+        assert_eq!(no_devices["user"]["email"], email);
+        assert_eq!(no_devices["user"]["isAdmin"], false);
+        assert_eq!(no_devices["devices"]["paired"], 0);
+        assert_eq!(no_devices["devices"]["online"], 0);
+        assert_eq!(no_devices["workspaces"]["total"], 0);
+        assert_eq!(no_devices["usage"]["available"], true);
+        assert_eq!(no_devices["usage"]["allTime"]["calls"], 0);
+        assert!(no_devices.get("skills").is_none()); // unported service is not fabricated
 
         // Real account-scoped usage: zero without events, idempotent recorded
         // MCP invocation, and provider-reported web chat tokens. No fake data.
@@ -821,6 +855,24 @@ mod tests {
                 .await
                 .unwrap()
         );
+        let live_overview = integration_overview(&app, &combined).await;
+        assert_eq!(live_overview["devices"]["paired"], 1);
+        assert_eq!(live_overview["devices"]["online"], 1);
+        assert_eq!(live_overview["workspaces"]["total"], 1);
+        assert_eq!(live_overview["workspaces"]["active"], 1);
+        assert_eq!(
+            live_overview["workspaces"]["recent"][0]["workspaceName"],
+            "Beta Repo"
+        );
+        assert_eq!(live_overview["workspaces"]["recent"][0]["status"], "active");
+        assert_eq!(
+            live_overview["workspaces"]["recent"][0]["runtimeOnline"],
+            true
+        );
+        assert_eq!(live_overview["usage"]["last24h"]["calls"], 1);
+        assert!(!live_overview.to_string().contains("secret_hash"));
+        assert!(!live_overview.to_string().contains("credentialId"));
+        assert!(!live_overview.to_string().contains("publicKey"));
         store
             .clear_runtime_presence(&credential_id, &current_lease)
             .await
@@ -831,6 +883,15 @@ mod tests {
                 .await
                 .unwrap()
                 .is_none()
+        );
+        let offline_overview = integration_overview(&app, &combined).await;
+        assert_eq!(offline_overview["devices"]["online"], 0);
+        assert_eq!(offline_overview["workspaces"]["total"], 1);
+        assert_eq!(offline_overview["workspaces"]["active"], 0);
+        assert_eq!(offline_overview["workspaces"]["offline"], 1);
+        assert_eq!(
+            offline_overview["workspaces"]["recent"][0]["runtimeOnline"],
+            false
         );
         assert_eq!(store.sync_workspaces(&device, &[]).await.unwrap(), 1);
         assert!(
@@ -860,6 +921,11 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+        let revoked_overview = integration_overview(&app, &combined).await;
+        assert_eq!(revoked_overview["devices"]["paired"], 0);
+        assert_eq!(revoked_overview["devices"]["online"], 0);
+        assert_eq!(revoked_overview["workspaces"]["total"], 0);
+        assert_eq!(revoked_overview["usage"]["allTime"]["calls"], 1);
 
         let logout_form = form_urlencoded::Serializer::new(String::new())
             .append_pair("csrf", &token)
