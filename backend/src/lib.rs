@@ -2,6 +2,7 @@
 //! No privileged workspace, auth, or MCP operations are exposed until
 //! their authorization and protocol contracts are implemented and tested.
 
+mod admin;
 mod auth;
 mod auth_session;
 mod devices;
@@ -93,6 +94,7 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
         .route("/api/v1/devices", get(devices::list))
         .route("/api/v1/usage", get(usage::report))
         .route("/api/v1/invite", get(invite::resource))
+        .route("/api/v1/admin", get(admin::resource))
         .route("/api/v1/dashboard/overview", get(overview::overview))
         .route("/api/v1/workspaces", get(workspaces::catalog))
         .route(

@@ -427,6 +427,7 @@ include!("store_workspaces.rs");
 include!("store_presence.rs");
 include!("store_usage.rs");
 include!("store_invite.rs");
+include!("store_admin.rs");
 
 #[cfg(test)]
 mod tests {
@@ -600,6 +601,10 @@ mod tests {
 
         let mut config = AuthConfig::from_env();
         config.store = Some(store.clone());
+        config.admin_emails.clear();
+        let mut admin_config = config.clone();
+        admin_config.admin_emails.push(email.clone());
+        let admin_app = router_with_auth(admin_config);
         let app = router_with_auth(config);
         let csrf_response = app
             .clone()
@@ -767,6 +772,38 @@ mod tests {
         assert_eq!(online_invite["directCount"], 1);
         assert_eq!(online_invite["activeCount"], 1);
         assert_eq!(online_invite["members"][0]["status"], "runtime_online");
+
+        let admin_request = || {
+            Request::builder()
+                .uri("/api/v1/admin")
+                .header(header::COOKIE, &combined)
+                .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                .header("x-admin", "true")
+                .body(Body::empty())
+                .unwrap()
+        };
+        let forbidden = app.clone().oneshot(admin_request()).await.unwrap();
+        assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+        let admin_response = admin_app.clone().oneshot(admin_request()).await.unwrap();
+        assert_eq!(admin_response.status(), StatusCode::OK);
+        assert_eq!(admin_response.headers()[header::CACHE_CONTROL], "no-store");
+        let admin_bytes = admin_response
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes();
+        let admin_data: serde_json::Value = serde_json::from_slice(&admin_bytes).unwrap();
+        let admin_rows = admin_data["users"].as_array().unwrap();
+        let owner = admin_rows.iter().find(|row| row["id"] == user_id).unwrap();
+        let guest = admin_rows.iter().find(|row| row["id"] == guest_id).unwrap();
+        assert_eq!(owner["inviteCount"], 1);
+        assert_eq!(guest["runtimeActive"], true);
+        assert_eq!(guest["mcpActive"], false);
+        assert_eq!(guest["email"], guest_email);
+        assert!(!admin_data.to_string().contains("passwordHash"));
+        assert!(!admin_data.to_string().contains("credentialId"));
+        assert!(!admin_data.to_string().contains("secretHash"));
         store
             .clear_runtime_presence(&guest_credential_id, &guest_lease)
             .await
@@ -1039,6 +1076,43 @@ mod tests {
         assert_eq!(revoked_overview["devices"]["online"], 0);
         assert_eq!(revoked_overview["workspaces"]["total"], 0);
         assert_eq!(revoked_overview["usage"]["allTime"]["calls"], 1);
+        let admin_after = admin_app.clone().oneshot(admin_request()).await.unwrap();
+        assert_eq!(admin_after.status(), StatusCode::OK);
+        let admin_after_bytes = admin_after.into_body().collect().await.unwrap().to_bytes();
+        let admin_after_data: serde_json::Value =
+            serde_json::from_slice(&admin_after_bytes).unwrap();
+        let owner_row = admin_after_data["users"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == user_id)
+            .unwrap();
+        assert_eq!(owner_row["lastMcpUsedAt"], measured_mcp.created_at);
+        assert_eq!(owner_row["runtimeActive"], false);
+        let risky_admin = admin_app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/admin")
+                    .header(header::COOKIE, &combined)
+                    .header(header::USER_AGENT, "Changed Integration Browser/2.0")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(risky_admin.status(), StatusCode::FORBIDDEN);
+        let risky_bytes = risky_admin.into_body().collect().await.unwrap().to_bytes();
+        let risky_body: serde_json::Value = serde_json::from_slice(&risky_bytes).unwrap();
+        assert_eq!(risky_body["error"], "reauthentication_required");
+        assert!(risky_body.get("users").is_none());
+        let client = store.pool.get().await.unwrap();
+        let audit_count:i64 = client.query_one(
+            "SELECT COUNT(*) FROM codelocal_audit_logs WHERE user_id=$1 AND event='admin.users_viewed'",
+            &[&user_id]
+        ).await.unwrap().get(0);
+        assert_eq!(audit_count, 2);
+        drop(client);
 
         let logout_form = form_urlencoded::Serializer::new(String::new())
             .append_pair("csrf", &token)
