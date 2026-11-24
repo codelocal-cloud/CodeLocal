@@ -107,6 +107,17 @@ impl AuthStore {
         Ok(Some(token))
     }
 
+    /// Resource-server identity, never derived from client-supplied account IDs.
+    pub async fn oauth_access_account(&self, token: &str, resource: &str) -> Result<Option<String>, StoreError> {
+        let db = self.pool.get().await.map_err(|_| unavailable("OAuth database unavailable"))?;
+        let row = db.query_opt(
+            "SELECT a.user_id FROM codelocal_beta_oauth_access a JOIN codelocal_users u ON u.id=a.user_id
+             WHERE a.token_hash=$1 AND a.resource=$2 AND a.expires_at>$3 AND a.security_version=u.security_version",
+            &[&oauth_hash(token), &resource, &now_millis()],
+        ).await.map_err(|_| unavailable("OAuth token validation unavailable"))?;
+        Ok(row.map(|r| r.get(0)))
+    }
+
     pub async fn revoke_oauth_access(&self,client_id:&str,token:&str) -> Result<(),StoreError> {
         let db=self.pool.get().await.map_err(|_| unavailable("OAuth database unavailable"))?;
         db.execute("DELETE FROM codelocal_beta_oauth_access WHERE token_hash=$1 AND client_id=$2",

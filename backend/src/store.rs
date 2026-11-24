@@ -907,6 +907,103 @@ mod tests {
         assert_eq!(row.get::<_, String>(1), user_id);
         assert_eq!(row.get::<_, String>(2), resource);
         drop(db);
+        let mcp_call = |token: &str, request: serde_json::Value| {
+            Request::builder()
+                .method("POST")
+                .uri("/mcp")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::ACCEPT, "application/json, text/event-stream")
+                .body(Body::from(request.to_string()))
+                .unwrap()
+        };
+        let init = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"CI","version":"1"}}});
+        let authenticated = app
+            .clone()
+            .oneshot(mcp_call(access, init.clone()))
+            .await
+            .unwrap();
+        assert_eq!(authenticated.status(), StatusCode::OK);
+        let init_data: serde_json::Value = serde_json::from_slice(
+            &authenticated
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes(),
+        )
+        .unwrap();
+        assert_eq!(init_data["result"]["protocolVersion"], "2025-06-18");
+        assert_eq!(
+            app.clone()
+                .oneshot(mcp_call(&"a".repeat(43), init.clone()))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let listing = app
+            .clone()
+            .oneshot(mcp_call(
+                access,
+                serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+            ))
+            .await
+            .unwrap();
+        let tools_json: serde_json::Value =
+            serde_json::from_slice(&listing.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(tools_json["result"]["tools"].as_array().unwrap().len(), 1);
+        let workspace_request = serde_json::json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"workspace","arguments":{"action":"list"}}});
+        let empty = app
+            .clone()
+            .oneshot(mcp_call(access, workspace_request.clone()))
+            .await
+            .unwrap();
+        let empty_json: serde_json::Value =
+            serde_json::from_slice(&empty.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        let catalog: serde_json::Value =
+            serde_json::from_str(empty_json["result"]["content"][0]["text"].as_str().unwrap())
+                .unwrap();
+        assert!(catalog["items"].as_array().unwrap().is_empty());
+        assert_eq!(catalog["remoteExecutionAvailable"], false);
+        let denied=app.clone().oneshot(mcp_call(access,serde_json::json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"terminal","arguments":{"action":"run"}}}))).await.unwrap();
+        let denied_json: serde_json::Value =
+            serde_json::from_slice(&denied.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(denied_json["error"]["code"], -32602);
+        let db = store.pool.get().await.unwrap();
+        db.execute(
+            "UPDATE codelocal_beta_oauth_access SET expires_at=$2 WHERE token_hash=$1",
+            &[&hashed, &(now_millis() - 1)],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(mcp_call(access, init.clone()))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        db.execute(
+            "UPDATE codelocal_beta_oauth_access SET expires_at=$2 WHERE token_hash=$1",
+            &[&hashed, &(now_millis() + 60000)],
+        )
+        .await
+        .unwrap();
+        db.execute("UPDATE codelocal_beta_oauth_access SET security_version=security_version+1 WHERE token_hash=$1",&[&hashed]).await.unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(mcp_call(access, init.clone()))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        db.execute("UPDATE codelocal_beta_oauth_access SET security_version=security_version-1 WHERE token_hash=$1",&[&hashed]).await.unwrap();
+        drop(db);
         let revoke_body = form_urlencoded::Serializer::new(String::new())
             .append_pair("client_id", oauth_client)
             .append_pair("token", access)
@@ -924,6 +1021,14 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(revoked.status(), StatusCode::OK);
+        assert_eq!(
+            app.clone()
+                .oneshot(mcp_call(access, init))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
         let db = store.pool.get().await.unwrap();
         assert!(
             db.query_opt(

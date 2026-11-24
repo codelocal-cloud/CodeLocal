@@ -5,6 +5,7 @@
 mod admin;
 mod auth;
 mod auth_session;
+mod cloud_mcp;
 mod devices;
 // Verify request signatures before adding privileged native-runtime routes.
 mod device_logout;
@@ -65,6 +66,11 @@ pub async fn live_router() -> Result<Router, Box<dyn std::error::Error>> {
 pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
+        .route(
+            "/.well-known/oauth-protected-resource/mcp",
+            get(cloud_mcp::metadata),
+        )
+        .route("/mcp", get(cloud_mcp::get).post(cloud_mcp::post))
         .route(
             "/.well-known/oauth-authorization-server",
             get(oauth::metadata),
@@ -194,11 +200,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unimplemented_legacy_routes_return_not_found() {
+    async fn mcp_without_beta_store_is_unavailable() {
         let response = router()
             .oneshot(Request::builder().uri("/mcp").body(Body::empty()).unwrap())
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }
