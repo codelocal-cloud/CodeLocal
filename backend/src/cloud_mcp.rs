@@ -124,6 +124,16 @@ fn success(id: Value, result: Value) -> Response {
     rpc(json!({"jsonrpc":"2.0","id":id,"result":result}))
 }
 
+/// Go-compatible payload estimate: roughly four Unicode scalar values per
+/// token. Serialized byte length is tracked separately.
+fn estimate_payload(value: &Value) -> (i64, i64) {
+    let serialized = value.to_string();
+    (
+        serialized.len() as i64,
+        serialized.chars().count().div_ceil(4) as i64,
+    )
+}
+
 fn tools() -> Value {
     json!({"tools":[{"name":"workspace","description":"List only your registered workspace metadata. No filesystem or remote execution is available.",
         "inputSchema":{"type":"object","properties":{"action":{"type":"string","enum":["list"]}},"required":["action"],"additionalProperties":false},
@@ -224,12 +234,37 @@ pub async fn post(State(config): State<AuthConfig>, headers: HeaderMap, body: By
             let Some(store) = &config.store else {
                 return fail(id, -32603, "Store unavailable");
             };
-            match workspace_list(store, &user).await {
-                Ok(result) => success(
-                    id,
-                    json!({"content":[{"type":"text","text":result.to_string()}],"isError":false}),
-                ),
-                Err(()) => fail(id, -32603, "Workspace catalog unavailable"),
+            let result = match workspace_list(store, &user).await {
+                Ok(result) => {
+                    json!({"content":[{"type":"text","text":result.to_string()}],"isError":false})
+                }
+                Err(()) => return fail(id, -32603, "Workspace catalog unavailable"),
+            };
+            // Meter the actual successful tool payload, not provider billing or
+            // authentication traffic. Persist before returning a successful result.
+            let (input_bytes, input_tokens_est) = estimate_payload(&params["arguments"]);
+            let (output_bytes, output_tokens_est) = estimate_payload(&result);
+            let mut event_bytes = [0u8; 16];
+            if getrandom::fill(&mut event_bytes).is_err() {
+                return fail(id, -32603, "Usage event unavailable");
+            }
+            let event_id = format!("mcp-{}", hex::encode(event_bytes));
+            let event = crate::store::McpUsageEvent {
+                event_id: &event_id,
+                user_id: &user,
+                device_id: "",
+                workspace_id: "",
+                tool: "workspace",
+                calls: 1,
+                input_bytes,
+                output_bytes,
+                input_tokens_est,
+                output_tokens_est,
+                created_at: crate::store::now_millis(),
+            };
+            match store.record_mcp_usage(&event).await {
+                Ok(true) => success(id, result),
+                _ => fail(id, -32603, "Usage recording unavailable"),
             }
         }
         _ => fail(id, -32601, "Method not found"),
@@ -239,6 +274,17 @@ pub async fn post(State(config): State<AuthConfig>, headers: HeaderMap, body: By
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn payload_estimates_are_unicode_aware() {
+        let value = json!({"message":"xin chào Việt Nam"});
+        let serialized = value.to_string();
+        let (bytes, tokens) = estimate_payload(&value);
+        assert_eq!(bytes, serialized.len() as i64);
+        assert_eq!(tokens, serialized.chars().count().div_ceil(4) as i64);
+        assert!(bytes > serialized.chars().count() as i64);
+        assert_eq!(estimate_payload(&json!({})), (2, 1));
+    }
+
     #[test]
     fn catalog_exposes_only_read_only_metadata() {
         let catalog = tools();

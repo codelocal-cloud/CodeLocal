@@ -967,6 +967,20 @@ mod tests {
                 .unwrap();
         assert!(catalog["items"].as_array().unwrap().is_empty());
         assert_eq!(catalog["remoteExecutionAvailable"], false);
+        let first_usage = store.usage_report(&user_id).await.unwrap().all_time;
+        assert_eq!(first_usage.calls, 1);
+        assert_eq!(
+            first_usage.input_tokens_estimated,
+            workspace_request["params"]["arguments"]
+                .to_string()
+                .chars()
+                .count()
+                .div_ceil(4) as i64
+        );
+        assert_eq!(
+            first_usage.output_tokens_estimated,
+            empty_json["result"].to_string().chars().count().div_ceil(4) as i64
+        );
         let denied=app.clone().oneshot(mcp_call(access,serde_json::json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"terminal","arguments":{"action":"run"}}}))).await.unwrap();
         let denied_json: serde_json::Value =
             serde_json::from_slice(&denied.into_body().collect().await.unwrap().to_bytes())
@@ -1053,7 +1067,7 @@ mod tests {
         assert_eq!(no_devices["devices"]["online"], 0);
         assert_eq!(no_devices["workspaces"]["total"], 0);
         assert_eq!(no_devices["usage"]["available"], true);
-        assert_eq!(no_devices["usage"]["allTime"]["calls"], 0);
+        assert_eq!(no_devices["usage"]["allTime"]["calls"], 1);
         assert!(no_devices.get("skills").is_none()); // unported service is not fabricated
 
         let no_invites = integration_invite(&app, &combined).await;
@@ -1212,6 +1226,47 @@ mod tests {
             store.list_workspace_catalog(&guest_id).await.unwrap().len(),
             1
         );
+        // The owner's new OAuth grant must not see the guest's real registered workspace.
+        let isolation_client = store
+            .register_oauth_client("CI catalog isolation", &[callback.to_owned()])
+            .await
+            .unwrap();
+        let isolation_grant = OAuthGrant {
+            client_id: &isolation_client.client_id,
+            redirect_uri: callback,
+            challenge: &challenge,
+            resource: &resource,
+        };
+        let isolation_code = store
+            .issue_oauth_code(&persisted, &isolation_grant)
+            .await
+            .unwrap()
+            .unwrap();
+        let isolation_access = store
+            .exchange_oauth_code(&isolation_code, &isolation_grant)
+            .await
+            .unwrap()
+            .unwrap();
+        let isolated = app
+            .clone()
+            .oneshot(mcp_call(&isolation_access, workspace_request.clone()))
+            .await
+            .unwrap();
+        assert_eq!(isolated.status(), StatusCode::OK);
+        let isolated_json: serde_json::Value =
+            serde_json::from_slice(&isolated.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        let isolated_catalog: serde_json::Value = serde_json::from_str(
+            isolated_json["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(isolated_catalog["items"].as_array().unwrap().is_empty());
+        assert_eq!(
+            store.usage_report(&guest_id).await.unwrap().all_time.calls,
+            0
+        );
         let replacement_pair = store
             .create_pairing(&guest_device.device_id, "Replacement Mac", "765432")
             .await
@@ -1287,10 +1342,10 @@ mod tests {
                 .is_empty()
         );
 
-        // Real account-scoped usage: zero without events, idempotent recorded
+        // Real account-scoped usage: measured gateway calls, idempotent recorded
         // MCP invocation, and provider-reported web chat tokens. No fake data.
         let initial_usage = store.usage_report(&user_id).await.unwrap();
-        assert_eq!(initial_usage.all_time.calls, 0);
+        assert_eq!(initial_usage.all_time.calls, 2);
         assert_eq!(initial_usage.web_chat.windows.all_time.turns, 0);
         let mcp_event_id = format!("mcp-beta-event-{suffix}");
         let measured_mcp = McpUsageEvent {
@@ -1341,9 +1396,15 @@ mod tests {
             usage["scope"],
             "MCP payload only; not full AI model/provider billing tokens"
         );
-        assert_eq!(usage["last24h"]["calls"], 1);
-        assert_eq!(usage["mcp"]["allTime"]["inputTokensEstimated"], 100);
-        assert_eq!(usage["mcp"]["allTime"]["totalTokensEstimated"], 160);
+        assert_eq!(usage["last24h"]["calls"], 3);
+        assert_eq!(
+            usage["mcp"]["allTime"]["inputTokensEstimated"],
+            initial_usage.all_time.input_tokens_estimated + 100
+        );
+        assert_eq!(
+            usage["mcp"]["allTime"]["totalTokensEstimated"],
+            initial_usage.all_time.total_tokens_estimated + 160
+        );
         assert_eq!(usage["webChat"]["last1h"]["turns"], 1);
         assert_eq!(usage["webChat"]["allTime"]["totalTokens"], 50);
         assert_eq!(usage["webChat"]["source"], "provider_reported");
@@ -1791,6 +1852,29 @@ mod tests {
                 .await
                 .unwrap()
         );
+        let live_catalog_response = app
+            .clone()
+            .oneshot(mcp_call(&isolation_access, workspace_request.clone()))
+            .await
+            .unwrap();
+        assert_eq!(live_catalog_response.status(), StatusCode::OK);
+        let live_rpc: serde_json::Value = serde_json::from_slice(
+            &live_catalog_response
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes(),
+        )
+        .unwrap();
+        let live_catalog: serde_json::Value =
+            serde_json::from_str(live_rpc["result"]["content"][0]["text"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(live_catalog["items"].as_array().unwrap().len(), 1);
+        assert_eq!(live_catalog["items"][0]["workspaceId"], "my-beta-workspace");
+        assert_eq!(live_catalog["items"][0]["runtimeOnline"], true);
+        assert!(!live_catalog.to_string().contains("credentialId"));
+        assert!(!live_catalog.to_string().contains("guest-only-repo"));
         let live_overview = integration_overview(&app, &combined).await;
         assert_eq!(live_overview["devices"]["paired"], 1);
         assert_eq!(live_overview["devices"]["online"], 1);
@@ -1805,7 +1889,7 @@ mod tests {
             live_overview["workspaces"]["recent"][0]["runtimeOnline"],
             true
         );
-        assert_eq!(live_overview["usage"]["last24h"]["calls"], 1);
+        assert_eq!(live_overview["usage"]["last24h"]["calls"], 4);
         assert!(!live_overview.to_string().contains("secret_hash"));
         assert!(!live_overview.to_string().contains("credentialId"));
         assert!(!live_overview.to_string().contains("publicKey"));
@@ -1891,7 +1975,7 @@ mod tests {
         assert_eq!(revoked_overview["devices"]["paired"], 0);
         assert_eq!(revoked_overview["devices"]["online"], 0);
         assert_eq!(revoked_overview["workspaces"]["total"], 0);
-        assert_eq!(revoked_overview["usage"]["allTime"]["calls"], 1);
+        assert_eq!(revoked_overview["usage"]["allTime"]["calls"], 4);
         let admin_after = admin_app.clone().oneshot(admin_request()).await.unwrap();
         assert_eq!(admin_after.status(), StatusCode::OK);
         let admin_after_bytes = admin_after.into_body().collect().await.unwrap().to_bytes();
@@ -1903,7 +1987,7 @@ mod tests {
             .iter()
             .find(|row| row["id"] == user_id)
             .unwrap();
-        assert_eq!(owner_row["lastMcpUsedAt"], measured_mcp.created_at);
+        assert!(owner_row["lastMcpUsedAt"].as_i64().unwrap() >= measured_mcp.created_at);
         assert_eq!(owner_row["runtimeActive"], false);
         let risky_admin = admin_app
             .clone()
@@ -1972,6 +2056,13 @@ mod tests {
         assert_eq!(after.status(), StatusCode::UNAUTHORIZED);
 
         let client = store.pool.get().await.unwrap();
+        client
+            .execute(
+                "DELETE FROM codelocal_beta_oauth_clients WHERE client_id=$1",
+                &[&isolation_client.client_id],
+            )
+            .await
+            .unwrap();
         client
             .execute(
                 "DELETE FROM codelocal_audit_logs WHERE user_id=$1",

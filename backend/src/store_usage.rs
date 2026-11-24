@@ -63,8 +63,6 @@ pub struct EstimatedWindows {
 
 /// An actual MCP invocation measured by a trusted server component.
 /// event_id is mandatory so repeated delivery cannot double count usage.
-// Pending the Cloud MCP invocation port; only real measured events may call this.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct McpUsageEvent<'a> {
     pub event_id: &'a str,
@@ -112,7 +110,6 @@ fn bucket_start(timestamp: i64) -> i64 {
 impl AuthStore {
     /// Record one *actual* backend MCP usage event exactly once and roll up
     /// counts transactionally. There is no user-callable external mutation route.
-    #[allow(dead_code)]
     pub async fn record_mcp_usage(&self, event: &McpUsageEvent<'_>) -> Result<bool, StoreError> {
         let values = [event.calls, event.input_bytes, event.output_bytes,
             event.input_tokens_est, event.output_tokens_est];
