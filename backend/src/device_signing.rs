@@ -2,7 +2,7 @@
 //! This is intentionally not wired to a file/terminal/MCP endpoint until nonce
 //! replay protection and workspace-policy checks are audited.
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
 
 const MAX_CLOCK_SKEW_SECONDS: i64 = 90;
@@ -67,6 +67,9 @@ pub fn verify(public_key: &str, proof: DeviceProof<'_>, now_unix: i64) -> Result
         .map_err(|_| ProofError::InvalidPublicKey)?;
     let verifying_key =
         VerifyingKey::from_bytes(&key_bytes).map_err(|_| ProofError::InvalidPublicKey)?;
+    if verifying_key.is_weak() {
+        return Err(ProofError::InvalidPublicKey);
+    }
     let timestamp = proof
         .timestamp
         .trim()
@@ -96,7 +99,7 @@ pub fn verify(public_key: &str, proof: DeviceProof<'_>, now_unix: i64) -> Result
         proof.nonce.trim(),
     );
     verifying_key
-        .verify(&canonical_request, &signature)
+        .verify_strict(&canonical_request, &signature)
         .map_err(|_| ProofError::BadSignature)
 }
 
@@ -164,6 +167,29 @@ mod tests {
                 1_700_000_000
             ),
             Err(ProofError::BadSignature)
+        );
+    }
+
+    #[test]
+    fn rejects_small_order_public_key() {
+        let (_, nonce, signature, _) = fixture();
+        // Compressed Edwards identity (small order).
+        let mut identity = [0u8; 32];
+        identity[0] = 1;
+        assert_eq!(
+            verify(
+                &URL_SAFE_NO_PAD.encode(identity),
+                DeviceProof {
+                    method: "POST",
+                    request_uri: "/api/client/workspaces?updated=1",
+                    timestamp: "1700000000",
+                    nonce: &nonce,
+                    signature: &signature,
+                    body: br#"{"hello":"world"}"#
+                },
+                1_700_000_000
+            ),
+            Err(ProofError::InvalidPublicKey)
         );
     }
 

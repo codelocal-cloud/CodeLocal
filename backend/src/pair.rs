@@ -247,11 +247,7 @@ pub async fn claim(State(config): State<AuthConfig>, Json(input): Json<ClaimPair
         return error(StatusCode::BAD_REQUEST, "invalid_credential_claim");
     };
     let key = input.device_public_key.trim();
-    if !key.is_empty()
-        && URL_SAFE_NO_PAD
-            .decode(key)
-            .map_or(true, |value| value.len() != 32)
-    {
+    if !key.is_empty() && !valid_device_public_key(key) {
         return error(StatusCode::BAD_REQUEST, "invalid_device_public_key");
     }
     let public_key = if key.is_empty() { None } else { Some(key) };
@@ -334,6 +330,16 @@ async fn auth_check_inner(config: AuthConfig, headers: HeaderMap) -> Response {
     Json(output).into_response()
 }
 
+fn valid_device_public_key(key: &str) -> bool {
+    let Ok(bytes) = URL_SAFE_NO_PAD.decode(key) else {
+        return false;
+    };
+    let Ok(bytes): Result<[u8; 32], _> = bytes.try_into() else {
+        return false;
+    };
+    ed25519_dalek::VerifyingKey::from_bytes(&bytes).is_ok_and(|key| !key.is_weak())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,6 +348,14 @@ mod tests {
         assert!(invalid_pair_id("too-short"));
         assert!(!invalid_pair_id("a01234567890abcdef01234567890abc"));
         assert!(valid_code("123456"));
+        let signing = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
+        assert!(valid_device_public_key(
+            &URL_SAFE_NO_PAD.encode(signing.verifying_key().as_bytes())
+        ));
+        let mut identity = [0u8; 32];
+        identity[0] = 1;
+        assert!(!valid_device_public_key(&URL_SAFE_NO_PAD.encode(identity)));
+        assert!(!valid_device_public_key("bad"));
         assert!(!valid_code("12345"));
         assert!(!valid_code("12345a"));
         let code = random_pair_code().unwrap();

@@ -1168,11 +1168,123 @@ mod tests {
             .unwrap();
         let offline_again = integration_invite(&app, &combined).await;
         assert_eq!(offline_again["activeCount"], 0);
+        // Re-pairing must not inherit old grants, preferences or credentials.
+        let guest_device = store
+            .authenticate_device(&guest_credential_id, &guest_proof)
+            .await
+            .unwrap()
+            .unwrap();
+        let guest_ws = WorkspaceMetadata {
+            workspace_id: "guest-only-repo".into(),
+            workspace_name: "Guest only".into(),
+            managed: false,
+            system_app: false,
+        };
+        store
+            .sync_workspaces(&guest_device, std::slice::from_ref(&guest_ws))
+            .await
+            .unwrap();
         assert!(
             store
-                .revoke_device(&guest_id, &guest_credential_id)
+                .change_runtime_preference(
+                    &guest_id,
+                    &guest_device.device_id,
+                    &guest_ws.workspace_id,
+                    PreferenceChange::WorktreeLimit(Some(4))
+                )
                 .await
                 .unwrap()
+        );
+        assert!(
+            store
+                .claim_pairing(
+                    &guest_pair.pairing_id,
+                    "654321",
+                    &guest_credential_id,
+                    &guest_proof,
+                    None
+                )
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            store.list_workspace_catalog(&guest_id).await.unwrap().len(),
+            1
+        );
+        let replacement_pair = store
+            .create_pairing(&guest_device.device_id, "Replacement Mac", "765432")
+            .await
+            .unwrap();
+        assert!(
+            store
+                .approve_pairing(&replacement_pair.pairing_id, "765432", &guest_id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let replacement_id = format!("cld_replacement_{suffix}");
+        let replacement_proof = hex::encode(Sha256::digest(b"beta-replacement-test-only"));
+        let replacement = store
+            .claim_pairing(
+                &replacement_pair.pairing_id,
+                "765432",
+                &replacement_id,
+                &replacement_proof,
+                None,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            store
+                .authenticate_device(&guest_credential_id, &guest_proof)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            store
+                .list_workspace_catalog(&guest_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            store
+                .registered_runtime_workspaces(&guest_id, &replacement.device_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            store
+                .sync_workspaces(&guest_device, std::slice::from_ref(&guest_ws))
+                .await
+                .is_err()
+        );
+        store
+            .sync_workspaces(&replacement, std::slice::from_ref(&guest_ws))
+            .await
+            .unwrap();
+        let fresh = store
+            .runtime_preference(&guest_id, &replacement.device_id, &guest_ws.workspace_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(fresh.max_worktrees, None);
+        assert!(
+            store
+                .revoke_device(&guest_id, &replacement_id)
+                .await
+                .unwrap()
+        );
+        assert!(
+            store
+                .registered_runtime_workspaces(&guest_id, &replacement.device_id)
+                .await
+                .unwrap()
+                .is_empty()
         );
 
         // Real account-scoped usage: zero without events, idempotent recorded

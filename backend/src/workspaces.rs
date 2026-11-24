@@ -27,11 +27,7 @@ pub struct SyncBody {
 }
 
 fn valid_workspace_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 80
-        && id
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'-'))
+    crate::runtime::valid_workspace_id(id)
 }
 fn validate_sync(input: &SyncBody) -> bool {
     if input.workspaces.len() > 100
@@ -270,6 +266,8 @@ mod tests {
         };
         assert!(validate_sync(&valid));
         assert!(!valid_workspace_id("../secret"));
+        assert!(!valid_workspace_id("."));
+        assert!(!valid_workspace_id(".."));
         assert!(!valid_workspace_id("/etc/passwd"));
         assert!(!valid_workspace_id("bad?name"));
         assert!(validate_sync(&SyncBody {

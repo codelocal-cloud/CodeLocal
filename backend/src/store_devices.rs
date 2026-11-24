@@ -137,6 +137,10 @@ impl AuthStore {
             "DELETE FROM codelocal_beta_runtime_secrets WHERE user_id=$1 AND device_id=$2",
             &[&user_id,&pair.device_id],
         ).await.map_err(|_| unavailable("beta stale device secret cleanup failed"))?;
+        // A new credential starts with no previously granted workspace metadata.
+        // This also cascades workspace preferences and workspace secrets.
+        tx.execute("DELETE FROM codelocal_workspaces WHERE user_id=$1 AND device_id=$2",
+            &[&user_id,&pair.device_id]).await.map_err(|_| unavailable("beta stale workspace cleanup failed"))?;
         tx.commit().await.map_err(|_| unavailable("beta pairing transaction commit failed"))?;
         Ok(Some(DeviceRecord::from_row(row)))
     }
@@ -185,6 +189,8 @@ impl AuthStore {
             "DELETE FROM codelocal_beta_runtime_secrets WHERE user_id=$1 AND device_id=$2",
             &[&user_id,&device_id],
         ).await.map_err(|_| unavailable("beta revoked device secret cleanup failed"))?;
+        tx.execute("DELETE FROM codelocal_workspaces WHERE user_id=$1 AND device_id=$2",
+            &[&user_id,&device_id]).await.map_err(|_| unavailable("beta revoked workspace cleanup failed"))?;
         tx.commit().await.map_err(|_| unavailable("beta revoke commit failed"))?;
         Ok(true)
     }

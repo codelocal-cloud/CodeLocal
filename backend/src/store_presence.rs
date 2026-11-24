@@ -24,7 +24,7 @@ impl RuntimePresence {
         } else {
             ids.split(',').map(str::to_owned).collect()
         };
-        if workspaces.len() > 100 || workspaces.iter().any(|id| !crate::runtime::valid_workspace_id(id)) {
+        if !crate::runtime::valid_workspace_ids(&workspaces) {
             return None;
         }
         Some(Self {lease:lease.to_owned(), workspace_ids:workspaces})

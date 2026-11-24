@@ -41,6 +41,7 @@ pub struct RuntimeEnvelope {
 
 pub(crate) fn valid_workspace_id(value: &str) -> bool {
     !value.is_empty()
+        && !matches!(value, "." | "..")
         && value.len() <= 80
         && value
             .bytes()
