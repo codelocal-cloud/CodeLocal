@@ -11,6 +11,7 @@ mod device_logout;
 pub mod device_signing;
 mod invite;
 mod mailer;
+mod oauth;
 mod overview;
 mod pair;
 mod password;
@@ -64,6 +65,15 @@ pub async fn live_router() -> Result<Router, Box<dyn std::error::Error>> {
 pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(oauth::metadata),
+        )
+        .route("/register", axum::routing::post(oauth::register))
+        .route("/api/v1/oauth/authorize-context", get(oauth::context))
+        .route("/authorize", axum::routing::post(oauth::authorize))
+        .route("/token", axum::routing::post(oauth::token))
+        .route("/revoke", axum::routing::post(oauth::revoke))
         .route("/api/v1/system/status", get(status))
         .route("/api/v1/auth/csrf", get(auth::csrf))
         .route("/api/v1/account", get(auth_session::account))

@@ -228,6 +228,12 @@ impl AuthStore {
                 "beta secret table missing; apply reviewed 006_beta_runtime_secrets.sql",
             ));
         }
+        let oauth_ready: bool = client.query_one("SELECT to_regclass('codelocal_beta_oauth_clients') IS NOT NULL AND to_regclass('codelocal_beta_oauth_codes') IS NOT NULL AND to_regclass('codelocal_beta_oauth_access') IS NOT NULL", &[]).await.map_err(|_| unavailable("beta OAuth schema check failed"))?.get(0);
+        if !oauth_ready {
+            return Err(unavailable(
+                "beta OAuth tables missing; apply reviewed 007_beta_oauth.sql",
+            ));
+        }
         let settings_ready: bool = client
             .query_one(
                 "SELECT to_regclass('codelocal_beta_runtime_preferences') IS NOT NULL",
@@ -456,6 +462,7 @@ include!("store_invite.rs");
 include!("store_admin.rs");
 include!("store_runtime_settings.rs");
 include!("store_runtime_secrets.rs");
+include!("store_oauth.rs");
 
 #[cfg(test)]
 mod tests {
@@ -716,6 +723,224 @@ mod tests {
         assert_eq!(account["email"], email);
         assert_eq!(account["csrf"], token);
         assert_eq!(account["userId"], user_id);
+
+        // OAuth public client registration, actual consent, PKCE and one-use exchange.
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+        let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+        let origin = crate::public_url::beta_origin().unwrap();
+        let resource = format!("{origin}/mcp");
+        let callback = "http://127.0.0.1:5050/callback";
+        let registered=app.clone().oneshot(Request::builder().method("POST").uri("/register")
+            .header(header::CONTENT_TYPE,"application/json")
+            .body(Body::from(serde_json::json!({"client_name":"CI OAuth fixture","redirect_uris":[callback]}).to_string())).unwrap())
+            .await.unwrap();
+        assert_eq!(registered.status(), StatusCode::CREATED);
+        let client_json: serde_json::Value =
+            serde_json::from_slice(&registered.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        let oauth_client = client_json["client_id"].as_str().unwrap();
+        let consent = |csrf: &str, redirect: &str| {
+            let mut fields = form_urlencoded::Serializer::new(String::new());
+            fields
+                .append_pair("client_id", oauth_client)
+                .append_pair("redirect_uri", redirect)
+                .append_pair("code_challenge", &challenge)
+                .append_pair("code_challenge_method", "S256")
+                .append_pair("response_type", "code")
+                .append_pair("resource", &resource)
+                .append_pair("scope", "mcp:tools")
+                .append_pair("state", "ci-state")
+                .append_pair("csrf", csrf);
+            Request::builder()
+                .method("POST")
+                .uri("/authorize")
+                .header(header::COOKIE, &combined)
+                .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from(fields.finish()))
+                .unwrap()
+        };
+        let mut query = form_urlencoded::Serializer::new(String::new());
+        query
+            .append_pair("client_id", oauth_client)
+            .append_pair("redirect_uri", callback)
+            .append_pair("code_challenge", &challenge)
+            .append_pair("code_challenge_method", "S256")
+            .append_pair("response_type", "code")
+            .append_pair("resource", &resource)
+            .append_pair("scope", "mcp:tools")
+            .append_pair("state", "ci-state");
+        let context_path = format!("/api/v1/oauth/authorize-context?{}", query.finish());
+        let consent_context = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(&context_path)
+                    .header(header::COOKIE, &combined)
+                    .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(consent_context.status(), StatusCode::OK);
+        let context_json: serde_json::Value = serde_json::from_slice(
+            &consent_context
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes(),
+        )
+        .unwrap();
+        assert_eq!(context_json["clientId"], oauth_client);
+        assert_eq!(context_json["email"], email);
+        assert_eq!(context_json["csrf"], token);
+        assert_eq!(
+            app.clone()
+                .oneshot(consent("wrong", callback))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(consent(
+                    &token,
+                    "https://unregistered.example.test/callback"
+                ))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        let approved = app
+            .clone()
+            .oneshot(consent(&token, callback))
+            .await
+            .unwrap();
+        assert_eq!(approved.status(), StatusCode::FOUND);
+        let callback_url =
+            url::Url::parse(approved.headers()[header::LOCATION].to_str().unwrap()).unwrap();
+        let pairs = callback_url
+            .query_pairs()
+            .into_owned()
+            .collect::<std::collections::HashMap<_, _>>();
+        assert_eq!(pairs["state"], "ci-state");
+        let oauth_code = &pairs["code"];
+        let exchange = |proof: &str, redirect: &str, audience: &str| {
+            let mut fields = form_urlencoded::Serializer::new(String::new());
+            fields
+                .append_pair("grant_type", "authorization_code")
+                .append_pair("client_id", oauth_client)
+                .append_pair("code", oauth_code)
+                .append_pair("code_verifier", proof)
+                .append_pair("redirect_uri", redirect)
+                .append_pair("resource", audience);
+            Request::builder()
+                .method("POST")
+                .uri("/token")
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from(fields.finish()))
+                .unwrap()
+        };
+        assert_eq!(
+            app.clone()
+                .oneshot(exchange(&"a".repeat(43), callback, &resource))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(exchange(
+                    verifier,
+                    "http://127.0.0.1:5051/callback",
+                    &resource
+                ))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(exchange(
+                    verifier,
+                    callback,
+                    "https://wrong.example.test/mcp"
+                ))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        let exchanged = app
+            .clone()
+            .oneshot(exchange(verifier, callback, &resource))
+            .await
+            .unwrap();
+        assert_eq!(exchanged.status(), StatusCode::OK);
+        assert_eq!(exchanged.headers()[header::CACHE_CONTROL], "no-store");
+        let token_json: serde_json::Value =
+            serde_json::from_slice(&exchanged.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(token_json["scope"], "mcp:tools");
+        assert!(token_json.get("refresh_token").is_none());
+        let access = token_json["access_token"].as_str().unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(exchange(verifier, callback, &resource))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        let db = store.pool.get().await.unwrap();
+        let hashed = oauth_hash(access);
+        let row=db.query_one("SELECT token_hash,user_id,resource FROM codelocal_beta_oauth_access WHERE token_hash=$1",&[&hashed]).await.unwrap();
+        assert_eq!(row.get::<_, String>(0), hashed);
+        assert_ne!(row.get::<_, String>(0), access);
+        assert_eq!(row.get::<_, String>(1), user_id);
+        assert_eq!(row.get::<_, String>(2), resource);
+        drop(db);
+        let revoke_body = form_urlencoded::Serializer::new(String::new())
+            .append_pair("client_id", oauth_client)
+            .append_pair("token", access)
+            .finish();
+        let revoked = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/revoke")
+                    .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                    .body(Body::from(revoke_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(revoked.status(), StatusCode::OK);
+        let db = store.pool.get().await.unwrap();
+        assert!(
+            db.query_opt(
+                "SELECT token_hash FROM codelocal_beta_oauth_access WHERE token_hash=$1",
+                &[&hashed]
+            )
+            .await
+            .unwrap()
+            .is_none()
+        );
+        db.execute(
+            "DELETE FROM codelocal_beta_oauth_clients WHERE client_id=$1",
+            &[&oauth_client],
+        )
+        .await
+        .unwrap();
+        drop(db);
         let no_devices = integration_overview(&app, &combined).await;
         assert_eq!(no_devices["user"]["email"], email);
         assert_eq!(no_devices["user"]["isAdmin"], false);
@@ -938,7 +1163,6 @@ mod tests {
         let credential_id = format!("cld_{suffix}");
         let secret_hash = hex::encode(Sha256::digest(b"beta-integration-credential"));
         let signing = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
-        use base64::Engine;
         let public_key = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(signing.verifying_key().as_bytes());
         let device = store

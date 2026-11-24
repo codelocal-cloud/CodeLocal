@@ -73,6 +73,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f backend/migrations/004_beta_usage.sql
           psql -v ON_ERROR_STOP=1 -f backend/migrations/005_beta_runtime_settings.sql
           psql -v ON_ERROR_STOP=1 -f backend/migrations/006_beta_runtime_secrets.sql
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/007_beta_oauth.sql
       - name: Auth → pairing → workspace → nonce/revocation E2E
         run: |
           set -euo pipefail

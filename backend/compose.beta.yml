@@ -19,6 +19,7 @@ services:
       - ./migrations/004_beta_usage.sql:/docker-entrypoint-initdb.d/004_beta_usage.sql:ro
       - ./migrations/005_beta_runtime_settings.sql:/docker-entrypoint-initdb.d/005_beta_runtime_settings.sql:ro
       - ./migrations/006_beta_runtime_secrets.sql:/docker-entrypoint-initdb.d/006_beta_runtime_secrets.sql:ro
+      - ./migrations/007_beta_oauth.sql:/docker-entrypoint-initdb.d/007_beta_oauth.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U codelocal_beta -d codelocal_beta"]
       interval: 3s
