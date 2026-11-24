@@ -215,6 +215,19 @@ impl AuthStore {
                 "beta usage tables missing; apply reviewed 004_beta_usage.sql",
             ));
         }
+        let settings_ready: bool = client
+            .query_one(
+                "SELECT to_regclass('codelocal_beta_runtime_preferences') IS NOT NULL",
+                &[],
+            )
+            .await
+            .map_err(|_| unavailable("beta settings schema check failed"))?
+            .get(0);
+        if !settings_ready {
+            return Err(unavailable(
+                "beta settings table missing; apply reviewed 005_beta_runtime_settings.sql",
+            ));
+        }
         let mut conn = self
             .redis
             .get_multiplexed_async_connection()
@@ -428,6 +441,7 @@ include!("store_presence.rs");
 include!("store_usage.rs");
 include!("store_invite.rs");
 include!("store_admin.rs");
+include!("store_runtime_settings.rs");
 
 #[cfg(test)]
 mod tests {
@@ -951,6 +965,152 @@ mod tests {
             system_app: false,
         };
         assert_eq!(store.sync_workspaces(&device, &[ws]).await.unwrap(), 0);
+        let settings_path = format!(
+            "/api/v1/runtime/settings?scope=workspace&deviceId={}&workspaceId=my-beta-workspace",
+            device.device_id
+        );
+        let settings_get = || {
+            Request::builder()
+                .uri(&settings_path)
+                .header(header::COOKIE, &combined)
+                .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                .body(Body::empty())
+                .unwrap()
+        };
+        let settings_post = |endpoint: &str, csrf: &str, fields: &[(&str, &str)]| {
+            let mut form = form_urlencoded::Serializer::new(String::new());
+            form.append_pair("scope", "workspace")
+                .append_pair("deviceId", &device.device_id)
+                .append_pair("workspaceId", "my-beta-workspace")
+                .append_pair("csrf", csrf);
+            for (key, value) in fields {
+                form.append_pair(key, value);
+            }
+            Request::builder()
+                .method("POST")
+                .uri(endpoint)
+                .header(header::COOKIE, &combined)
+                .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from(form.finish()))
+                .unwrap()
+        };
+        let before_settings = app.clone().oneshot(settings_get()).await.unwrap();
+        assert_eq!(before_settings.status(), StatusCode::OK);
+        let body: serde_json::Value = serde_json::from_slice(
+            &before_settings
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes(),
+        )
+        .unwrap();
+        assert_eq!(body["effective"]["executionMode"], "safe");
+        assert_eq!(body["effective"]["executionModeConfigured"], false);
+        let denied = app
+            .clone()
+            .oneshot(settings_post(
+                "/api/v1/runtime/settings/execution",
+                "bad-csrf",
+                &[("mode", "live")],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+        let invalid = app
+            .clone()
+            .oneshot(settings_post(
+                "/api/v1/runtime/settings/config",
+                &token,
+                &[
+                    ("key", "CODELOCAL_MAX_WORKTREES"),
+                    ("value", "21"),
+                    ("action", "set"),
+                ],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+        let saved = app
+            .clone()
+            .oneshot(settings_post(
+                "/api/v1/runtime/settings/execution",
+                &token,
+                &[("mode", "live")],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(saved.status(), StatusCode::OK);
+        let result: serde_json::Value =
+            serde_json::from_slice(&saved.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(result["runtimeApplied"], false);
+        let saved_limit = app
+            .clone()
+            .oneshot(settings_post(
+                "/api/v1/runtime/settings/config",
+                &token,
+                &[
+                    ("key", "CODELOCAL_MAX_WORKTREES"),
+                    ("value", "5"),
+                    ("action", "set"),
+                ],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(saved_limit.status(), StatusCode::OK);
+        let persisted = store
+            .runtime_preference(&user_id, &device.device_id, "my-beta-workspace")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.mode.as_deref(), Some("live"));
+        assert_eq!(persisted.max_worktrees, Some(5));
+        let get_saved = app.clone().oneshot(settings_get()).await.unwrap();
+        assert_eq!(get_saved.status(), StatusCode::OK);
+        let saved_body: serde_json::Value =
+            serde_json::from_slice(&get_saved.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(
+            saved_body["effective"]["values"]["CODELOCAL_MAX_WORKTREES"],
+            "5"
+        );
+        assert_eq!(saved_body["layer"]["executionMode"], "live");
+        assert!(
+            store
+                .runtime_preference(&guest_id, &device.device_id, "my-beta-workspace")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            !store
+                .change_runtime_preference(
+                    &guest_id,
+                    &device.device_id,
+                    "my-beta-workspace",
+                    PreferenceChange::WorktreeLimit(Some(8))
+                )
+                .await
+                .unwrap()
+        );
+        let reset_limit = app
+            .clone()
+            .oneshot(settings_post(
+                "/api/v1/runtime/settings/config",
+                &token,
+                &[("key", "CODELOCAL_MAX_WORKTREES"), ("action", "delete")],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(reset_limit.status(), StatusCode::OK);
+        let reset = store
+            .runtime_preference(&user_id, &device.device_id, "my-beta-workspace")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(reset.max_worktrees, None);
+        assert_eq!(reset.mode.as_deref(), Some("live"));
         assert_eq!(
             store.list_workspace_catalog(&user_id).await.unwrap().len(),
             1
@@ -1044,6 +1204,15 @@ mod tests {
             false
         );
         assert_eq!(store.sync_workspaces(&device, &[]).await.unwrap(), 1);
+        assert!(
+            store
+                .runtime_preference(&user_id, &device.device_id, "my-beta-workspace")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let removed_settings = app.clone().oneshot(settings_get()).await.unwrap();
+        assert_eq!(removed_settings.status(), StatusCode::NOT_FOUND);
         assert!(
             store
                 .list_workspace_catalog(&user_id)

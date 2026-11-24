@@ -71,6 +71,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f backend/migrations/002_beta_devices.sql
           psql -v ON_ERROR_STOP=1 -f backend/migrations/003_beta_workspaces.sql
           psql -v ON_ERROR_STOP=1 -f backend/migrations/004_beta_usage.sql
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/005_beta_runtime_settings.sql
       - name: Auth → pairing → workspace → nonce/revocation E2E
         run: cargo test -p codelocal-backend isolated_beta_login_account_logout_real_stores -- --ignored --nocapture
 
