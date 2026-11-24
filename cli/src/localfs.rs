@@ -2,8 +2,10 @@
 //! There is intentionally no network handler or process execution entrypoint here.
 //! All access requires a local workspace grant and is read-only.
 mod edit;
+mod index;
 mod search;
 pub use edit::EditResult;
+pub use index::SourceIndex;
 pub use search::{FileSearch, ProjectMap, TextSearch};
 
 use crate::workspace::{Registry, Workspace, id_for_path, validate_workspace_path};
