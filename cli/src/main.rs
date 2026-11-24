@@ -26,6 +26,7 @@ Available in isolated Rust beta:
   codelocal source-index <id> <file>  List lexical symbols and import candidates
   codelocal symbol-search <id> <name> [limit]  Find exact declaration candidates
   codelocal dependency-map <id> [limit]        Map bounded import candidates
+  codelocal index-cache-clear        Delete the optional local beta index cache
   codelocal local-info <id> <file>   Inspect local file metadata inside a granted workspace
   codelocal local-read <id> <file>   Read bounded local text (no network)
   codelocal local-read <id> <file> <from> <to>   Read a bounded line range
@@ -47,6 +48,7 @@ Not yet migrated from Go (will fail explicitly):
 
 Environment:
   CODELOCAL_BETA_API_URL             Beta API (HTTPS, or localhost HTTP)
+  CODELOCAL_BETA_INDEX_CACHE=1       Opt in to bounded lexical cache on Unix
   CODELOCAL_BETA_STATE_DIR           Beta-only local state directory
                                      Default: ~/.codelocal-beta
 
@@ -134,6 +136,13 @@ fn run(args: &[String]) -> Result<(), String> {
                 "{}",
                 serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?
             );
+            Ok(())
+        }
+        "index-cache-clear" if args.len() == 1 => {
+            let registry = Registry::beta_default().map_err(|err| err.to_string())?;
+            let removed =
+                codelocal::localfs::clear_index_cache(&registry).map_err(|err| err.to_string())?;
+            println!("{}", json!({"removed": removed}));
             Ok(())
         }
         "symbol-search" if args.len() == 3 || args.len() == 4 => {

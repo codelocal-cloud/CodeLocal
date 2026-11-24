@@ -6,6 +6,11 @@ mod index;
 mod search;
 pub use edit::EditResult;
 pub use index::{DependencyMap, SourceIndex, SymbolSearch};
+
+/// Clear the optional local beta index cache without touching the workspace.
+pub fn clear_index_cache(registry: &Registry) -> Result<bool> {
+    Ok(index::cache::clear(registry.state_dir())?)
+}
 pub use search::{FileSearch, ProjectMap, TextSearch};
 
 use crate::workspace::{Registry, Workspace, id_for_path, validate_workspace_path};
@@ -86,6 +91,9 @@ pub struct FileBatch {
 pub struct LocalReader {
     workspace_id: String,
     root: PathBuf,
+    index_state_dir: PathBuf,
+    grant_at: u64,
+    index_cache_enabled: bool,
 }
 
 impl LocalReader {
@@ -101,10 +109,10 @@ impl LocalReader {
             .iter()
             .find(|w| w.workspace_id == workspace_id)
             .ok_or(LocalReadError::NotFound)?;
-        Self::for_grant(grant)
+        Self::for_grant(grant, registry.state_dir())
     }
 
-    fn for_grant(grant: &Workspace) -> Result<Self> {
+    fn for_grant(grant: &Workspace, state_dir: &Path) -> Result<Self> {
         if grant.managed || grant.system_app || grant.hidden || grant.system {
             return Err(LocalReadError::Denied(
                 "system and managed workspaces require a separate policy",
@@ -123,6 +131,9 @@ impl LocalReader {
         Ok(Self {
             workspace_id: grant.workspace_id.clone(),
             root,
+            index_state_dir: state_dir.to_path_buf(),
+            grant_at: grant.granted_at,
+            index_cache_enabled: std::env::var("CODELOCAL_BETA_INDEX_CACHE").as_deref() == Ok("1"),
         })
     }
 

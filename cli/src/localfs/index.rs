@@ -1,7 +1,9 @@
 //! Bounded lexical declaration/import inventory. Not a semantic resolver.
 use super::search::{MAX_WALK_DEPTH, MAX_WALK_ENTRIES};
 use super::{LocalReadError, LocalReader, Result, bounded_bytes, open_beneath, validated_segments};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+pub(crate) mod cache;
 use std::{collections::BTreeSet, path::Path};
 
 const FILE_CAP: u64 = 256 * 1024;
@@ -18,14 +20,16 @@ pub struct SourceIndex {
     analysis: &'static str,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Symbol {
     name: String,
-    kind: &'static str,
+    kind: String,
     line: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Import {
     reference: String,
     line: usize,
@@ -234,7 +238,7 @@ fn analyze(path: String, lang: &'static str, text: &str) -> SourceIndex {
             if result.symbols.len() < ITEM_CAP {
                 result.symbols.push(Symbol {
                     name: name.to_owned(),
-                    kind,
+                    kind: kind.to_owned(),
                     line: index + 1,
                 });
             } else {
@@ -300,6 +304,8 @@ struct ScanStats {
     scanned_bytes: u64,
     skipped_sources: usize,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache: Option<cache::CacheStats>,
 }
 
 #[derive(Debug, Serialize)]
@@ -317,7 +323,7 @@ struct SymbolMatch {
     path: String,
     language: &'static str,
     name: String,
-    kind: &'static str,
+    kind: String,
     line: usize,
 }
 
@@ -391,6 +397,7 @@ fn relative_candidates(source: &str, reference: &str, files: &BTreeSet<String>) 
 impl LocalReader {
     fn scan_workspace_sources(&self, mut visit: impl FnMut(SourceIndex)) -> Result<ScanStats> {
         let mut stats = ScanStats::default();
+        let mut cache = cache::ScanCache::start(self);
         for entry in self.walk() {
             let entry =
                 entry.map_err(|_| LocalReadError::Denied("source index traversal failed"))?;
@@ -459,11 +466,18 @@ impl LocalReader {
                 stats.truncated = true;
                 continue;
             };
-            let index = analyze(path, lang, text);
+            let index = match cache.as_mut() {
+                Some(cache) => {
+                    let digest = hex::encode(Sha256::digest(&bytes));
+                    cache.index(path, lang, text, digest)
+                }
+                None => analyze(path, lang, text),
+            };
             stats.indexed_files += 1;
             stats.truncated |= index.truncated;
             visit(index);
         }
+        stats.cache = cache.map(|cache| cache.finish(self));
         Ok(stats)
     }
 
