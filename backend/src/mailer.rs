@@ -36,6 +36,7 @@ impl Mailer {
         // For now deliberately hard-code the real provider: no arbitrary URL fetching,
         // no sending access tokens to a user-controllable destination.
         let client = Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(12))
             .build()
             .ok()?;

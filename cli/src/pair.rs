@@ -19,7 +19,7 @@ use std::{
 use tempfile::NamedTempFile;
 use url::Url;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Credential {
     credential_id: String,
@@ -182,10 +182,12 @@ fn device_id(dir: &Path) -> Result<String, String> {
     match fs::read_to_string(&target) {
         Ok(id) => {
             let id = id.trim();
-            if id.len() < 16
-                || id.len() > 80
-                || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
-            {
+            if !id.strip_prefix("rust-beta-").is_some_and(|suffix| {
+                suffix.len() == 32
+                    && suffix
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            }) {
                 return Err("invalid persistent beta device ID".into());
             }
             return Ok(id.to_owned());
@@ -263,6 +265,7 @@ pub fn login(force: bool) -> Result<(), String> {
     let _held_lock = lock(&dir)?;
     let origin = beta_url()?;
     let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|_| "unable to create secure beta HTTP client")?;
@@ -444,6 +447,7 @@ fn signed_post(
     let canonical = canonical_device_request("POST", path, timestamp, &nonce, &payload);
     let signature = URL_SAFE_NO_PAD.encode(signing_key.sign(&canonical).to_bytes());
     let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|_| "unable to initialize beta HTTP client")?;
@@ -651,6 +655,25 @@ mod tests {
             let metadata = fs::metadata(dir.path().join("credential.json")).unwrap();
             assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
         }
+    }
+
+    #[test]
+    fn rejects_corrupt_persistent_device_ids_without_replacing_them() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("device-id");
+        for invalid in [
+            "rust-beta-123456",
+            "rust-beta-1234567",
+            "other-12345678901234567890123456789012",
+            "rust-beta-ABCDEF0123456789ABCDEF0123456789",
+        ] {
+            fs::write(&path, invalid).unwrap();
+            assert!(device_id(dir.path()).is_err());
+            assert_eq!(fs::read_to_string(&path).unwrap(), invalid);
+        }
+        let valid = "rust-beta-0123456789abcdef0123456789abcdef";
+        fs::write(&path, valid).unwrap();
+        assert_eq!(device_id(dir.path()).unwrap(), valid);
     }
 
     #[test]
