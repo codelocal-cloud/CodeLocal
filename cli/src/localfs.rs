@@ -4,7 +4,7 @@
 mod edit;
 mod search;
 pub use edit::EditResult;
-pub use search::{FileSearch, TextSearch};
+pub use search::{FileSearch, ProjectMap, TextSearch};
 
 use crate::workspace::{Registry, Workspace, id_for_path, validate_workspace_path};
 use serde::Serialize;

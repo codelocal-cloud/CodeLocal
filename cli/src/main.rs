@@ -22,6 +22,7 @@ Available in isolated Rust beta:
   codelocal login --force            Re-pair and replace saved beta credential
   codelocal sync                     Sync signed workspace metadata to beta cloud
   codelocal logout                   Signed beta credential revoke + local sign-out
+  codelocal project-map <id>         Inspect bounded project structure locally
   codelocal local-info <id> <file>   Inspect local file metadata inside a granted workspace
   codelocal local-read <id> <file>   Read bounded local text (no network)
   codelocal local-read <id> <file> <from> <to>   Read a bounded line range
@@ -129,6 +130,17 @@ fn run(args: &[String]) -> Result<(), String> {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
+        "project-map" if args.len() == 2 => {
+            let registry = Registry::beta_default().map_err(|err| err.to_string())?;
+            let reader =
+                LocalReader::from_registry(&registry, &args[1]).map_err(|err| err.to_string())?;
+            let map = reader.project_map().map_err(|err| err.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&map).map_err(|err| err.to_string())?
             );
             Ok(())
         }

@@ -15,6 +15,12 @@ const PROTOCOL_VERSION: &str = "2025-06-18";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MapInput {
+    workspace_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ReadInput {
     workspace_id: String,
     path: String,
@@ -44,6 +50,13 @@ fn catalog() -> Value {
             "name":"codelocal_workspace_list",
             "description":"List explicitly granted beta workspace IDs and names without local paths",
             "inputSchema":{"type":"object","properties":{},"additionalProperties":false},
+            "annotations":{"readOnlyHint":true}
+        },
+        {
+            "name":"codelocal_project_map",
+            "description":"Scan a granted workspace for bounded project structure, language counts, manifest and entrypoint paths after human approval; no file contents",
+            "inputSchema":{"type":"object","properties":{"workspaceId":{"type":"string"}},
+                "required":["workspaceId"],"additionalProperties":false},
             "annotations":{"readOnlyHint":true}
         },
         {
@@ -125,6 +138,14 @@ fn call(name: &str, arguments: Value, registry: &Registry) -> Result<Value, Stri
             Ok(json!({"workspaces":grants.iter().map(|w| json!({
                 "workspaceId":w.workspace_id,"workspaceName":w.workspace_name
             })).collect::<Vec<_>>()}))
+        }
+        "codelocal_project_map" => {
+            let input: MapInput =
+                serde_json::from_value(arguments).map_err(|_| "invalid project map arguments")?;
+            let reader = LocalReader::from_registry(registry, &input.workspace_id)
+                .map_err(|err| err.to_string())?;
+            serde_json::to_value(reader.project_map().map_err(|err| err.to_string())?)
+                .map_err(|_| "could not serialize project map".into())
         }
         "codelocal_local_info" | "codelocal_local_read" => {
             let input: ReadInput =
@@ -255,6 +276,7 @@ fn gated_call(
             | "codelocal_local_read"
             | "codelocal_local_read_many"
             | "codelocal_local_search"
+            | "codelocal_project_map"
     ) {
         return Err("unknown or disabled local MCP tool".into());
     }
@@ -360,7 +382,7 @@ mod tests {
             .iter()
             .map(|v| v["name"].as_str().unwrap())
             .collect::<Vec<_>>();
-        assert_eq!(names.len(), 5);
+        assert_eq!(names.len(), 6);
         assert!(
             !names
                 .iter()
@@ -442,6 +464,36 @@ mod tests {
             "params":{"name":"codelocal_local_read","arguments":{"workspaceId":"ungranted","path":"main.rs"}}}),&r).unwrap();
         assert_eq!(unknown["result"]["isError"], true);
     }
+    #[test]
+    fn project_map_requires_one_use_human_approval() {
+        let (_temp, registry, id) = setup();
+        let mut request = json!({"jsonrpc":"2.0","id":7,"method":"tools/call",
+            "params":{"name":"codelocal_project_map","arguments":{"workspaceId":id}}});
+        let pending = dispatch(&request, &registry).unwrap();
+        let details: Value =
+            serde_json::from_str(pending["result"]["content"][0]["text"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(details["status"], "approval_required");
+        assert!(!pending.to_string().contains("main.rs"));
+        let ticket = details["approvalId"].as_str().unwrap();
+        let approvals = ApprovalStore::new(registry.state_dir());
+        assert!(approvals.decide(ticket, true).unwrap());
+        request["params"]["approvalId"] = json!(ticket);
+        let approved = dispatch(&request, &registry).unwrap();
+        assert_eq!(approved["result"]["isError"], false);
+        let map: Value =
+            serde_json::from_str(approved["result"]["content"][0]["text"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(map["languages"]["Rust"], 1);
+        assert_eq!(map["entrypoints"], json!(["main.rs"]));
+        assert!(!map.to_string().contains("TOKEN=hidden"));
+        assert!(!map.to_string().contains(".env"));
+        assert_eq!(
+            dispatch(&request, &registry).unwrap()["result"]["isError"],
+            true
+        );
+    }
+
     #[test]
     fn revoked_grant_invalidates_approved_ticket() {
         let (_temp, registry, id) = setup();
