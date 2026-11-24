@@ -8,6 +8,7 @@ mod devices;
 // Verify request signatures before adding privileged native-runtime routes.
 mod device_logout;
 pub mod device_signing;
+mod invite;
 mod mailer;
 mod overview;
 mod pair;
@@ -91,6 +92,7 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
         .route("/api/client/runtime/ws", get(runtime::connect))
         .route("/api/v1/devices", get(devices::list))
         .route("/api/v1/usage", get(usage::report))
+        .route("/api/v1/invite", get(invite::resource))
         .route("/api/v1/dashboard/overview", get(overview::overview))
         .route("/api/v1/workspaces", get(workspaces::catalog))
         .route(

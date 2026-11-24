@@ -426,6 +426,7 @@ include!("store_devices.rs");
 include!("store_workspaces.rs");
 include!("store_presence.rs");
 include!("store_usage.rs");
+include!("store_invite.rs");
 
 #[cfg(test)]
 mod tests {
@@ -443,6 +444,31 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/v1/dashboard/overview")
+                    .header(header::COOKIE, cookies)
+                    .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    async fn integration_invite(app: &axum::Router, cookies: &str) -> serde_json::Value {
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode, header},
+        };
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/invite")
                     .header(header::COOKIE, cookies)
                     .header(header::USER_AGENT, "CodeLocal Integration Test/1.0")
                     .body(Body::empty())
@@ -666,6 +692,93 @@ mod tests {
         assert_eq!(no_devices["usage"]["available"], true);
         assert_eq!(no_devices["usage"]["allTime"]["calls"], 0);
         assert!(no_devices.get("skills").is_none()); // unported service is not fabricated
+
+        let no_invites = integration_invite(&app, &combined).await;
+        assert_eq!(no_invites["referralCode"], referral);
+        assert_eq!(no_invites["directCount"], 0);
+        assert_eq!(no_invites["activeCount"], 0);
+        let guest_id = format!("rust-beta-invite-{suffix}");
+        let guest_email = format!("alice-{suffix}@example.test");
+        let guest_code = format!("I{}", suffix[..5].to_uppercase());
+        let client = store.pool.get().await.unwrap();
+        client
+            .execute(
+                "INSERT INTO codelocal_users(id,email,password_hash,password_salt,
+                created_at,referral_code,referred_by_code)
+             VALUES($1,$2,$3,$4,$5,$6,$7)",
+                &[
+                    &guest_id,
+                    &guest_email,
+                    &hash,
+                    &salt,
+                    &now_millis(),
+                    &guest_code,
+                    &referral,
+                ],
+            )
+            .await
+            .unwrap();
+        drop(client);
+        let invite = integration_invite(&app, &combined).await;
+        assert_eq!(invite["directCount"], 1);
+        assert_eq!(invite["activeCount"], 0);
+        assert_eq!(invite["members"][0]["emailMasked"], "al***@example.test");
+        assert_eq!(invite["members"][0]["status"], "offline");
+        assert!(!invite.to_string().contains(&guest_email));
+        assert!(!invite.to_string().contains(&guest_id));
+        assert!(
+            store
+                .invited_by_referral(&guest_code)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let guest_pair = store
+            .create_pairing(&format!("guest-device-{suffix}"), "Guest Mac", "654321")
+            .await
+            .unwrap();
+        assert!(
+            store
+                .approve_pairing(&guest_pair.pairing_id, "654321", &guest_id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let guest_credential_id = format!("cld_guest_{suffix}");
+        let guest_proof = hex::encode(Sha256::digest(b"beta-guest-test-only"));
+        assert!(
+            store
+                .claim_pairing(
+                    &guest_pair.pairing_id,
+                    "654321",
+                    &guest_credential_id,
+                    &guest_proof,
+                    None
+                )
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let guest_lease = store
+            .begin_runtime_presence(&guest_credential_id, &[])
+            .await
+            .unwrap();
+        let online_invite = integration_invite(&app, &combined).await;
+        assert_eq!(online_invite["directCount"], 1);
+        assert_eq!(online_invite["activeCount"], 1);
+        assert_eq!(online_invite["members"][0]["status"], "runtime_online");
+        store
+            .clear_runtime_presence(&guest_credential_id, &guest_lease)
+            .await
+            .unwrap();
+        let offline_again = integration_invite(&app, &combined).await;
+        assert_eq!(offline_again["activeCount"], 0);
+        assert!(
+            store
+                .revoke_device(&guest_id, &guest_credential_id)
+                .await
+                .unwrap()
+        );
 
         // Real account-scoped usage: zero without events, idempotent recorded
         // MCP invocation, and provider-reported web chat tokens. No fake data.
@@ -974,6 +1087,10 @@ mod tests {
                 "DELETE FROM codelocal_audit_logs WHERE user_id=$1",
                 &[&user_id],
             )
+            .await
+            .unwrap();
+        client
+            .execute("DELETE FROM codelocal_users WHERE id=$1", &[&guest_id])
             .await
             .unwrap();
         client
