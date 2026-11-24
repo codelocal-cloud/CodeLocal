@@ -2,7 +2,8 @@
 use crate::{
     auth::AuthConfig,
     auth_session::{csrf_matches, error, identify},
-    store::{PreferenceChange, RuntimePreference, now_millis},
+    runtime_secrets::{self, SecretKey},
+    store::{PreferenceChange, RuntimePreference, RuntimeSecretRefs, now_millis},
 };
 use axum::{
     Form, Json,
@@ -89,7 +90,9 @@ fn worktree_change(key: &str, action: &str, value: &str) -> Result<PreferenceCha
     Ok(PreferenceChange::WorktreeLimit(Some(limit)))
 }
 
-fn resource(target: Target, pref: RuntimePreference) -> Value {
+fn resource(target: Target, pref: RuntimePreference, refs: RuntimeSecretRefs) -> Value {
+    let layer_updated = pref.updated_at.max(refs.layer_updated_at);
+    let effective_updated = pref.updated_at.max(refs.updated_at);
     let mut values = serde_json::Map::new();
     if let Some(limit) = pref.max_worktrees {
         values.insert("CODELOCAL_MAX_WORKTREES".into(), json!(limit.to_string()));
@@ -99,9 +102,9 @@ fn resource(target: Target, pref: RuntimePreference) -> Value {
     json!({
         "scope":target.scope, "deviceId":target.device_id,"workspaceId":target.workspace_id,
         "layer":{"scope":target.scope,"executionMode":mode,"executionModeConfigured":configured,
-            "values":values,"updatedAt":pref.updated_at},
+            "values":values,"secrets":refs.layer,"updatedAt":layer_updated},
         "effective":{"executionMode":mode,"executionModeConfigured":configured,
-            "values":values,"version":pref.updated_at,"updatedAt":pref.updated_at}
+            "values":values,"secrets":refs.effective,"version":effective_updated,"updatedAt":effective_updated}
     })
 }
 
@@ -134,7 +137,19 @@ pub async fn get_settings(
             );
         }
     };
-    let mut response = Json(resource(target, pref)).into_response();
+    let refs = match store
+        .runtime_secret_refs(&user.id, &target.device_id, &target.workspace_id)
+        .await
+    {
+        Ok(refs) => refs,
+        Err(_) => {
+            return error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "runtime_secrets_unavailable",
+            );
+        }
+    };
+    let mut response = Json(resource(target, pref, refs)).into_response();
     response.headers_mut().insert(
         header::CACHE_CONTROL,
         axum::http::HeaderValue::from_static("no-store"),
@@ -218,6 +233,107 @@ pub async fn set_execution(
     mutate(config, headers, form, true).await
 }
 
+#[derive(Deserialize)]
+pub struct SecretForm {
+    #[serde(flatten)]
+    target: Target,
+    csrf: String,
+    name: String,
+    #[serde(default)]
+    action: String,
+    #[serde(default)]
+    value: String,
+}
+
+impl Drop for SecretForm {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.value.zeroize();
+        self.csrf.zeroize();
+    }
+}
+
+pub async fn set_secret(
+    State(config): State<AuthConfig>,
+    headers: HeaderMap,
+    Form(mut form): Form<SecretForm>,
+) -> Response {
+    let Some(store) = &config.store else {
+        return error(StatusCode::UNAUTHORIZED, "unauthorized");
+    };
+    let (_, session, user) = match identify(store, &config, &headers).await {
+        Ok(Some(identity)) => identity,
+        Ok(None) => return error(StatusCode::UNAUTHORIZED, "unauthorized"),
+        Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "identity_unavailable"),
+    };
+    if session.risk_until > now_millis() {
+        return error(StatusCode::FORBIDDEN, "reauthentication_required");
+    }
+    if !csrf_matches(&session.csrf, &form.csrf) {
+        return error(StatusCode::FORBIDDEN, "invalid_csrf");
+    }
+    let Some(target) = std::mem::take(&mut form.target).normalized() else {
+        return error(StatusCode::BAD_REQUEST, "invalid_runtime_scope");
+    };
+    let name = form.name.trim();
+    if !runtime_secrets::valid_name(name) {
+        return error(StatusCode::BAD_REQUEST, "invalid_runtime_key");
+    }
+    let sealed = match form.action.as_str() {
+        "delete" => None,
+        "set" | "" => {
+            if !runtime_secrets::valid_value(&form.value) {
+                return error(StatusCode::BAD_REQUEST, "invalid_secret_value");
+            }
+            let Some(key) = SecretKey::from_env() else {
+                return error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "secret_encryption_unavailable",
+                );
+            };
+            match key.seal(
+                &user.id,
+                &target.device_id,
+                &target.workspace_id,
+                name,
+                &form.value,
+            ) {
+                Ok(sealed) => Some(sealed),
+                Err(()) => {
+                    return error(StatusCode::SERVICE_UNAVAILABLE, "secret_encryption_failed");
+                }
+            }
+        }
+        _ => return error(StatusCode::BAD_REQUEST, "invalid_action"),
+    };
+    use zeroize::Zeroize;
+    form.value.zeroize();
+    match store
+        .change_runtime_secret(
+            &user.id,
+            &target.device_id,
+            &target.workspace_id,
+            name,
+            sealed,
+        )
+        .await
+    {
+        Ok(true) => {
+            let mut response = Json(json!({"ok":true,"runtimeApplied":false})).into_response();
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                axum::http::HeaderValue::from_static("no-store"),
+            );
+            response
+        }
+        Ok(false) => error(StatusCode::NOT_FOUND, "runtime_target_not_found"),
+        Err(_) => error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "runtime_secret_update_failed",
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,6 +388,7 @@ mod tests {
         let body = resource(
             Target::default().normalized().unwrap(),
             RuntimePreference::default(),
+            RuntimeSecretRefs::default(),
         );
         assert_eq!(body["scope"], "global");
         assert_eq!(body["effective"]["executionMode"], "safe");

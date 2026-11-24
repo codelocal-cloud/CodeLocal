@@ -72,8 +72,12 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f backend/migrations/003_beta_workspaces.sql
           psql -v ON_ERROR_STOP=1 -f backend/migrations/004_beta_usage.sql
           psql -v ON_ERROR_STOP=1 -f backend/migrations/005_beta_runtime_settings.sql
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/006_beta_runtime_secrets.sql
       - name: Auth → pairing → workspace → nonce/revocation E2E
-        run: cargo test -p codelocal-backend isolated_beta_login_account_logout_real_stores -- --ignored --nocapture
+        run: |
+          set -euo pipefail
+          export CODELOCAL_BETA_RUNTIME_SECRET_KEY_HEX="$(openssl rand -hex 32)"
+          cargo test -p codelocal-backend isolated_beta_login_account_logout_real_stores -- --ignored --nocapture
 
   web:
     runs-on: ubuntu-latest

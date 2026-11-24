@@ -263,6 +263,7 @@ dependencies = [
  "http-body-util",
  "redis",
  "reqwest",
+ "ring",
  "scrypt",
  "serde",
  "serde_json",
@@ -274,6 +275,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "zeroize",
 ]
 
 [[package]]

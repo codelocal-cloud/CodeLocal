@@ -131,6 +131,12 @@ impl AuthStore {
             RETURNING {DEVICE_COLS}"),
             &[&credential_id, &user_id, &pair.device_id, &pair.device_name, &public_key, &secret_hash, &now],
         ).await.map_err(|_| unavailable("beta device credential claim failed"))?;
+        // New credentials must never inherit device/workspace secrets from
+        // an earlier pairing. Preserve global account-owned secrets only.
+        tx.execute(
+            "DELETE FROM codelocal_beta_runtime_secrets WHERE user_id=$1 AND device_id=$2",
+            &[&user_id,&pair.device_id],
+        ).await.map_err(|_| unavailable("beta stale device secret cleanup failed"))?;
         tx.commit().await.map_err(|_| unavailable("beta pairing transaction commit failed"))?;
         Ok(Some(DeviceRecord::from_row(row)))
     }
@@ -167,11 +173,19 @@ impl AuthStore {
     }
 
     pub async fn revoke_device(&self, user_id: &str, credential_id: &str) -> Result<bool, StoreError> {
-        let client = self.pool.get().await.map_err(|_| unavailable("beta PostgreSQL unavailable"))?;
-        let n = client.execute(
-            "UPDATE codelocal_devices SET revoked_at=$3 WHERE user_id=$1 AND credential_id=$2 AND revoked_at IS NULL",
+        let mut client = self.pool.get().await.map_err(|_| unavailable("beta PostgreSQL unavailable"))?;
+        let tx = client.transaction().await.map_err(|_| unavailable("beta revoke transaction failed"))?;
+        let row = tx.query_opt(
+            "UPDATE codelocal_devices SET revoked_at=$3 WHERE user_id=$1 AND credential_id=$2 AND revoked_at IS NULL RETURNING device_id",
             &[&user_id,&credential_id,&now_millis()],
         ).await.map_err(|_| unavailable("beta device revoke failed"))?;
-        Ok(n == 1)
+        let Some(row)=row else {return Ok(false);};
+        let device_id:String = row.get(0);
+        tx.execute(
+            "DELETE FROM codelocal_beta_runtime_secrets WHERE user_id=$1 AND device_id=$2",
+            &[&user_id,&device_id],
+        ).await.map_err(|_| unavailable("beta revoked device secret cleanup failed"))?;
+        tx.commit().await.map_err(|_| unavailable("beta revoke commit failed"))?;
+        Ok(true)
     }
 }

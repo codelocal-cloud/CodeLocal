@@ -215,6 +215,19 @@ impl AuthStore {
                 "beta usage tables missing; apply reviewed 004_beta_usage.sql",
             ));
         }
+        let secret_ready: bool = client
+            .query_one(
+                "SELECT to_regclass('codelocal_beta_runtime_secrets') IS NOT NULL",
+                &[],
+            )
+            .await
+            .map_err(|_| unavailable("beta secret schema check failed"))?
+            .get(0);
+        if !secret_ready {
+            return Err(unavailable(
+                "beta secret table missing; apply reviewed 006_beta_runtime_secrets.sql",
+            ));
+        }
         let settings_ready: bool = client
             .query_one(
                 "SELECT to_regclass('codelocal_beta_runtime_preferences') IS NOT NULL",
@@ -442,6 +455,7 @@ include!("store_usage.rs");
 include!("store_invite.rs");
 include!("store_admin.rs");
 include!("store_runtime_settings.rs");
+include!("store_runtime_secrets.rs");
 
 #[cfg(test)]
 mod tests {
@@ -1076,6 +1090,177 @@ mod tests {
             "5"
         );
         assert_eq!(saved_body["layer"]["executionMode"], "live");
+
+        // Disposable test values, never real credentials.
+        let sample_value = "integration-fixture-not-a-credential";
+        let key =
+            crate::runtime_secrets::SecretKey::from_env().expect("ephemeral CI encryption key");
+        let global = key
+            .seal(&user_id, "", "", "GLOBAL_FIXTURE", sample_value)
+            .unwrap();
+        assert!(
+            store
+                .change_runtime_secret(&user_id, "", "", "GLOBAL_FIXTURE", Some(global))
+                .await
+                .unwrap()
+        );
+        let scoped = key
+            .seal(
+                &user_id,
+                &device.device_id,
+                "",
+                "DEVICE_FIXTURE",
+                sample_value,
+            )
+            .unwrap();
+        assert!(
+            store
+                .change_runtime_secret(
+                    &user_id,
+                    &device.device_id,
+                    "",
+                    "DEVICE_FIXTURE",
+                    Some(scoped)
+                )
+                .await
+                .unwrap()
+        );
+        let denied_secret = app
+            .clone()
+            .oneshot(settings_post(
+                "/api/v1/runtime/settings/secret",
+                "wrong-csrf",
+                &[
+                    ("name", "WORKSPACE_FIXTURE"),
+                    ("value", sample_value),
+                    ("action", "set"),
+                ],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(denied_secret.status(), StatusCode::FORBIDDEN);
+        let write_secret = || {
+            settings_post(
+                "/api/v1/runtime/settings/secret",
+                &token,
+                &[
+                    ("name", "WORKSPACE_FIXTURE"),
+                    ("value", sample_value),
+                    ("action", "set"),
+                ],
+            )
+        };
+        let saved_secret = app.clone().oneshot(write_secret()).await.unwrap();
+        assert_eq!(saved_secret.status(), StatusCode::OK);
+        let saved_response = saved_secret.into_body().collect().await.unwrap().to_bytes();
+        assert!(!String::from_utf8_lossy(&saved_response).contains(sample_value));
+        let client = store.pool.get().await.unwrap();
+        let encrypted_row=client.query_one(
+            "SELECT nonce,ciphertext FROM codelocal_beta_runtime_secrets WHERE user_id=$1 AND device_id=$2 AND workspace_id=$3 AND name='WORKSPACE_FIXTURE'",
+            &[&user_id,&device.device_id,&"my-beta-workspace"]
+        ).await.unwrap();
+        let first_nonce: Vec<u8> = encrypted_row.get(0);
+        let first_cipher: Vec<u8> = encrypted_row.get(1);
+        assert_eq!(first_nonce.len(), 12);
+        assert_eq!(first_cipher.len(), sample_value.len() + 16);
+        assert!(!String::from_utf8_lossy(&first_cipher).contains(sample_value));
+        drop(client);
+        assert_eq!(
+            app.clone().oneshot(write_secret()).await.unwrap().status(),
+            StatusCode::OK
+        );
+        let client = store.pool.get().await.unwrap();
+        let replacement=client.query_one(
+            "SELECT nonce,ciphertext FROM codelocal_beta_runtime_secrets WHERE user_id=$1 AND name='WORKSPACE_FIXTURE'",
+            &[&user_id]
+        ).await.unwrap();
+        assert_ne!(first_nonce, replacement.get::<_, Vec<u8>>(0));
+        assert_ne!(first_cipher, replacement.get::<_, Vec<u8>>(1));
+        drop(client);
+        let secret_settings = app.clone().oneshot(settings_get()).await.unwrap();
+        assert_eq!(secret_settings.status(), StatusCode::OK);
+        assert_eq!(secret_settings.headers()[header::CACHE_CONTROL], "no-store");
+        let raw = secret_settings
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes();
+        assert!(!String::from_utf8_lossy(&raw).contains(sample_value));
+        let secret_dto: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(
+            secret_dto["layer"]["secrets"]["WORKSPACE_FIXTURE"]["configured"],
+            true
+        );
+        assert!(
+            secret_dto["layer"]["secrets"]
+                .get("GLOBAL_FIXTURE")
+                .is_none()
+        );
+        assert_eq!(
+            secret_dto["effective"]["secrets"]["GLOBAL_FIXTURE"]["configured"],
+            true
+        );
+        assert_eq!(
+            secret_dto["effective"]["secrets"]["DEVICE_FIXTURE"]["configured"],
+            true
+        );
+        assert_eq!(
+            secret_dto["effective"]["secrets"]["WORKSPACE_FIXTURE"]
+                .as_object()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(
+            store
+                .runtime_secret_refs(&guest_id, "", "")
+                .await
+                .unwrap()
+                .effective
+                .is_empty()
+        );
+        assert!(
+            !store
+                .change_runtime_secret(
+                    &guest_id,
+                    &device.device_id,
+                    "my-beta-workspace",
+                    "WORKSPACE_FIXTURE",
+                    None
+                )
+                .await
+                .unwrap()
+        );
+        let removed_secret = app
+            .clone()
+            .oneshot(settings_post(
+                "/api/v1/runtime/settings/secret",
+                &token,
+                &[("name", "WORKSPACE_FIXTURE"), ("action", "delete")],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(removed_secret.status(), StatusCode::OK);
+        assert!(
+            !store
+                .runtime_secret_refs(&user_id, &device.device_id, "my-beta-workspace")
+                .await
+                .unwrap()
+                .layer
+                .contains_key("WORKSPACE_FIXTURE")
+        );
+        assert_eq!(
+            app.clone().oneshot(write_secret()).await.unwrap().status(),
+            StatusCode::OK
+        );
+        let client = store.pool.get().await.unwrap();
+        let audit_leak:bool=client.query_one(
+            "SELECT EXISTS(SELECT 1 FROM codelocal_audit_logs WHERE user_id=$1 AND event='runtime.secret_updated' AND position($2 in detail::text)>0)",
+            &[&user_id,&sample_value]
+        ).await.unwrap().get(0);
+        assert!(!audit_leak);
+        drop(client);
         assert!(
             store
                 .runtime_preference(&guest_id, &device.device_id, "my-beta-workspace")
@@ -1211,6 +1396,12 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+        let after_remove = store
+            .runtime_secret_refs(&user_id, &device.device_id, "my-beta-workspace")
+            .await
+            .unwrap();
+        assert!(!after_remove.effective.contains_key("WORKSPACE_FIXTURE"));
+        assert!(after_remove.effective.contains_key("DEVICE_FIXTURE"));
         let removed_settings = app.clone().oneshot(settings_get()).await.unwrap();
         assert_eq!(removed_settings.status(), StatusCode::NOT_FOUND);
         assert!(
@@ -1233,6 +1424,21 @@ mod tests {
                 .unwrap()
         );
         assert!(store.revoke_device(&user_id, &credential_id).await.unwrap());
+        let client = store.pool.get().await.unwrap();
+        let remaining:i64=client.query_one(
+            "SELECT COUNT(*) FROM codelocal_beta_runtime_secrets WHERE user_id=$1 AND device_id=$2",
+            &[&user_id,&device.device_id]
+        ).await.unwrap().get(0);
+        assert_eq!(remaining, 0);
+        drop(client);
+        assert!(
+            store
+                .runtime_secret_refs(&user_id, "", "")
+                .await
+                .unwrap()
+                .effective
+                .contains_key("GLOBAL_FIXTURE")
+        );
         assert!(
             store
                 .authenticate_device(&credential_id, &secret_hash)

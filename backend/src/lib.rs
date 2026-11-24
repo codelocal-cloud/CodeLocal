@@ -17,6 +17,7 @@ mod password;
 mod password_reset;
 mod public_url;
 mod runtime;
+mod runtime_secrets;
 mod runtime_settings;
 mod signup;
 mod store;
@@ -96,6 +97,10 @@ pub(crate) fn router_with_auth(config: auth::AuthConfig) -> Router {
         .route("/api/v1/usage", get(usage::report))
         .route("/api/v1/invite", get(invite::resource))
         .route("/api/v1/admin", get(admin::resource))
+        .route(
+            "/api/v1/runtime/settings/secret",
+            axum::routing::post(runtime_settings::set_secret),
+        )
         .route(
             "/api/v1/runtime/settings",
             get(runtime_settings::get_settings),
