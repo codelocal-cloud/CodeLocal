@@ -416,12 +416,45 @@ fn canonical_device_request(
     .into_bytes()
 }
 
+#[derive(Debug)]
+pub(crate) enum SyncFailure {
+    Retryable(String),
+    Permanent(String),
+}
+
+impl std::fmt::Display for SyncFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Retryable(message) | Self::Permanent(message) => f.write_str(message),
+        }
+    }
+}
+impl From<&str> for SyncFailure {
+    fn from(message: &str) -> Self {
+        Self::Permanent(message.into())
+    }
+}
+impl From<String> for SyncFailure {
+    fn from(message: String) -> Self {
+        Self::Permanent(message)
+    }
+}
+
+fn sync_status_failure(status: reqwest::StatusCode) -> SyncFailure {
+    let message = format!("signed beta workspace sync failed ({status})");
+    if status.is_server_error() || matches!(status.as_u16(), 408 | 429) {
+        SyncFailure::Retryable(message)
+    } else {
+        SyncFailure::Permanent(message)
+    }
+}
+
 fn signed_post(
     c: &Credential,
     origin: &str,
     path: &str,
     payload: Vec<u8>,
-) -> Result<reqwest::blocking::Response, String> {
+) -> Result<reqwest::blocking::Response, SyncFailure> {
     if c.server_url != origin
         || !matches!(
             path,
@@ -461,17 +494,35 @@ fn signed_post(
         .header("X-CodeLocal-Signature", signature)
         .body(payload)
         .send()
-        .map_err(|_| "signed beta request could not reach server".into())
+        .map_err(|err| {
+            if err.is_builder() {
+                SyncFailure::Permanent("invalid signed beta request".into())
+            } else {
+                SyncFailure::Retryable("signed beta request could not reach server".into())
+            }
+        })
 }
 
 /// Push only beta workspace IDs/names, never machine filesystem paths.
 pub fn sync() -> Result<(), String> {
+    sync_metadata(None)
+        .map(|_| ())
+        .map_err(|err| err.to_string())
+}
+
+/// Return exactly the IDs acknowledged by the cloud for this credential.
+/// Runtime callers pass the expected credential so re-pairing cannot silently
+/// switch the identity used by a live socket.
+pub(crate) fn sync_metadata(expected: Option<&str>) -> Result<Vec<String>, SyncFailure> {
     let registry = Registry::beta_default().map_err(|e| e.to_string())?;
     let origin = beta_url()?;
     let c =
         load_credential(registry.state_dir())?.ok_or("no paired beta device; run login first")?;
     if c.server_url != origin {
         return Err("saved credential belongs to another beta API".into());
+    }
+    if expected.is_some_and(|id| id != c.credential_id) {
+        return Err("beta runtime credential changed; restart the runtime".into());
     }
     let workspaces = registry.list().map_err(|e| e.to_string())?;
     if workspaces.len() > 100 {
@@ -496,10 +547,7 @@ pub fn sync() -> Result<(), String> {
     const PATH: &str = "/api/client/workspaces/sync";
     let resp = signed_post(&c, &origin, PATH, payload)?;
     if !resp.status().is_success() {
-        return Err(format!(
-            "signed beta workspace sync failed ({})",
-            resp.status()
-        ));
+        return Err(sync_status_failure(resp.status()));
     }
     let result: serde_json::Value = resp
         .json()
@@ -512,7 +560,10 @@ pub fn sync() -> Result<(), String> {
         workspaces.len()
     );
     println!("Cloud metadata only; runtime execution remains disabled.");
-    Ok(())
+    Ok(workspaces
+        .into_iter()
+        .map(|workspace| workspace.workspace_id)
+        .collect())
 }
 
 /// Explicitly revoke a beta device in the Cloud before forgetting its local
@@ -526,7 +577,8 @@ pub fn logout() -> Result<(), String> {
     if origin != c.server_url {
         return Err("saved credential belongs to another beta API".into());
     }
-    let resp = signed_post(&c, &origin, "/api/client/auth/logout", b"{}".to_vec())?;
+    let resp = signed_post(&c, &origin, "/api/client/auth/logout", b"{}".to_vec())
+        .map_err(|err| err.to_string())?;
     if !resp.status().is_success() {
         return Err(format!(
             "beta server did not confirm credential revocation ({}); local credential retained",
@@ -628,6 +680,22 @@ mod tests {
         assert!(validate_approval_url("http://not-local.example/pair/approve").is_err());
         assert!(validate_approval_url("https://user:pass@example.com/pair/approve").is_err());
         assert!(validate_approval_url("https://beta.example.com/evil").is_err());
+    }
+
+    #[test]
+    fn sync_failures_distinguish_service_outage_and_authorization() {
+        for status in [408, 429, 500, 502, 503, 504] {
+            assert!(matches!(
+                sync_status_failure(reqwest::StatusCode::from_u16(status).unwrap()),
+                SyncFailure::Retryable(_)
+            ));
+        }
+        for status in [301, 400, 401, 403, 404, 409] {
+            assert!(matches!(
+                sync_status_failure(reqwest::StatusCode::from_u16(status).unwrap()),
+                SyncFailure::Permanent(_)
+            ));
+        }
     }
 
     #[test]

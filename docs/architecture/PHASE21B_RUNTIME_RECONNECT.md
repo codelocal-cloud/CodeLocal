@@ -1,0 +1,7 @@
+# Phase 21B — Runtime reconnect and acknowledged grant snapshots
+
+The foreground Rust client now retains the original paired device identity for the duration of the process. A metadata sync returns the exact acknowledged workspace IDs, and registration and subsequent runtime_sync frames use that snapshot instead of re-reading the local registry after the network request. Re-pairing requires restarting the old runtime; it cannot silently switch identities.
+
+Transport failures, HTTP 408/429 and server-side 5xx errors retry with bounded exponential backoff (1–30 seconds). Authentication/authorization, invalid local configuration, unexpected HTTP statuses and invalid application messages fail closed. The WebSocket upgrade timeout is 15 seconds; sends are bounded to 10 seconds; frames/messages are capped at 16 KiB. Heartbeat expiry uses a dedicated 50-second deadline when the loop is polling; synchronous metadata updates can delay polling. After a connection remains registered for 60 seconds, the reconnect backoff resets. --once never loops.
+
+Local Rust checks: 97 tests passed, no failures; Clippy passed. The status-classification regression test covers both transient and permanent HTTP errors. Full outage/recovery tests against a running CLI process and graceful Ctrl+C shutdown remain pending; socket drop is still handled by the server and bounded Redis lease. This does not enable remote execution.

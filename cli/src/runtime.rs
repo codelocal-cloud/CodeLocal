@@ -12,10 +12,7 @@ use tokio::{
     runtime::Builder,
     time::{Instant, interval, sleep},
 };
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::{Message, client::IntoClientRequest, http},
-};
+use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest, http};
 
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(50);
 const WORKSPACE_SYNC_INTERVAL: Duration = Duration::from_secs(30);
@@ -73,22 +70,76 @@ fn is_registered(response: &Value) -> bool {
         && response["now"].as_i64().is_some_and(|now| now > 0)
 }
 
-async fn connect_once(access: &RuntimeAccess, once: bool) -> Result<(), String> {
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const SEND_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_FRAME: usize = 16 * 1024;
+const STABLE_CONNECTION: Duration = Duration::from_secs(60);
+
+type RuntimeSocket =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+fn retry(message: &str) -> pair::SyncFailure {
+    pair::SyncFailure::Retryable(message.into())
+}
+
+fn connect_failure(error: tokio_tungstenite::tungstenite::Error) -> pair::SyncFailure {
+    use tokio_tungstenite::tungstenite::Error;
+    match error {
+        Error::Http(response) => {
+            let status = response.status();
+            let message = format!("beta runtime upgrade failed ({status})");
+            if status.is_server_error() || matches!(status.as_u16(), 408 | 429) {
+                pair::SyncFailure::Retryable(message)
+            } else {
+                pair::SyncFailure::Permanent(message)
+            }
+        }
+        _ => retry("beta runtime WebSocket connection failed"),
+    }
+}
+
+async fn sync_for(access: &RuntimeAccess) -> Result<Vec<String>, pair::SyncFailure> {
+    let expected = access.credential_id.clone();
+    tokio::task::spawn_blocking(move || pair::sync_metadata(Some(&expected)))
+        .await
+        .map_err(|_| "beta workspace sync worker failed")?
+}
+
+async fn send_frame(socket: &mut RuntimeSocket, message: Message) -> Result<(), pair::SyncFailure> {
+    tokio::time::timeout(SEND_TIMEOUT, socket.send(message))
+        .await
+        .map_err(|_| retry("beta runtime send timed out"))?
+        .map_err(|_| retry("beta runtime send failed"))
+}
+
+async fn connect_once(
+    access: &RuntimeAccess,
+    once: bool,
+    mut ids: Vec<String>,
+    registered_at: &mut Option<Instant>,
+) -> Result<(), pair::SyncFailure> {
     let request = handshake_request(access)?;
-    let (mut socket, _) = connect_async(request)
-        .await
-        .map_err(|err| format!("beta runtime WebSocket connect failed: {err}"))?;
-    let mut ids = granted_workspace_ids()?;
-    socket
-        .send(Message::Text(registration(access, &ids).to_string().into()))
-        .await
-        .map_err(|_| "beta runtime registration send failed")?;
+    let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+        .max_message_size(Some(MAX_FRAME))
+        .max_frame_size(Some(MAX_FRAME));
+    let (mut socket, _) = tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        tokio_tungstenite::connect_async_with_config(request, Some(config), false),
+    )
+    .await
+    .map_err(|_| retry("beta runtime WebSocket connect timed out"))?
+    .map_err(connect_failure)?;
+    send_frame(
+        &mut socket,
+        Message::Text(registration(access, &ids).to_string().into()),
+    )
+    .await?;
 
     let registered = tokio::time::timeout(Duration::from_secs(12), socket.next())
         .await
-        .map_err(|_| "beta runtime registration timed out")?
-        .ok_or("beta runtime ended before registration")?
-        .map_err(|_| "beta runtime registration was rejected")?;
+        .map_err(|_| retry("beta runtime registration timed out"))?
+        .ok_or_else(|| retry("beta runtime ended before registration"))?
+        .map_err(|_| retry("beta runtime registration connection failed"))?;
     let Message::Text(raw) = registered else {
         return Err("beta runtime did not acknowledge device registration".into());
     };
@@ -97,61 +148,51 @@ async fn connect_once(access: &RuntimeAccess, once: bool) -> Result<(), String> 
     if !is_registered(&response) {
         return Err("beta runtime did not confirm registration".into());
     }
+    *registered_at = Some(Instant::now());
     if once {
-        socket
-            .close(None)
-            .await
-            .map_err(|_| "beta runtime self-check could not close socket")?;
+        send_frame(&mut socket, Message::Close(None)).await?;
         return Ok(());
     }
     eprintln!("Rust beta runtime connected: device presence only; no remote tools.");
     let mut tick = interval(WORKSPACE_SYNC_INTERVAL);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_rx = Instant::now();
     loop {
         tokio::select! {
             event = socket.next() => {
                 let Some(message) = event else {
-                    return Err("beta runtime connection closed".into());
+                    return Err(retry("beta runtime connection closed"));
                 };
-                let message = message.map_err(|_| "beta runtime connection failed")?;
+                let message = message.map_err(|_| retry("beta runtime connection failed"))?;
                 match message {
                     Message::Text(raw) => {
                         let value: Value = serde_json::from_str(raw.as_str())
                             .map_err(|_| "beta runtime returned invalid JSON")?;
                         match value["type"].as_str() {
                             Some("runtime_ping") => {
-                                socket.send(Message::Text(json!({"type":"runtime_pong"}).to_string().into()))
-                                    .await.map_err(|_| "beta runtime heartbeat send failed")?;
+                                send_frame(&mut socket, Message::Text(json!({"type":"runtime_pong"}).to_string().into())).await?;
                                 last_rx = Instant::now();
                             }
-                            _ => {
-                                return Err("unsupported remote runtime event rejected".into());
-                            }
+                            _ => return Err("unsupported remote runtime event rejected".into()),
                         }
                     }
-                    Message::Ping(payload) => {
-                        socket.send(Message::Pong(payload)).await
-                            .map_err(|_| "beta runtime protocol pong failed")?;
-                    }
+                    Message::Ping(payload) => send_frame(&mut socket, Message::Pong(payload)).await?,
                     Message::Pong(_) => {}
-                    Message::Close(_) => return Err("beta runtime server closed connection".into()),
+                    Message::Close(_) => return Err(retry("beta runtime server closed connection")),
                     _ => return Err("unsupported runtime frame rejected".into()),
                 }
             }
+            _ = tokio::time::sleep_until(last_rx + HEARTBEAT_TIMEOUT) => {
+                return Err(retry("beta runtime heartbeat expired"));
+            }
             _ = tick.tick() => {
-                if last_rx.elapsed() > HEARTBEAT_TIMEOUT {
-                    return Err("beta runtime heartbeat expired".into());
-                }
-                let current = granted_workspace_ids()?;
-                if current != ids {
-                    // Signed metadata synchronization precedes new workspace
-                    // presence; no workspace paths or content are transmitted.
-                    tokio::task::spawn_blocking(pair::sync).await
-                        .map_err(|_| "beta workspace sync worker failed")??;
-                    socket.send(Message::Text(json!({
+                if granted_workspace_ids()? != ids {
+                    // Advertise the exact acknowledged snapshot, never a second
+                    // registry read taken after the signed sync request.
+                    let current = sync_for(access).await?;
+                    send_frame(&mut socket, Message::Text(json!({
                         "type":"runtime_sync","workspaceIds":current
-                    }).to_string().into()))
-                        .await.map_err(|_| "runtime workspace update failed")?;
+                    }).to_string().into())).await?;
                     ids = current;
                 }
             }
@@ -161,7 +202,8 @@ async fn connect_once(access: &RuntimeAccess, once: bool) -> Result<(), String> 
 
 /// Starts foreground liveness runtime, or makes one signed connection with --once.
 pub fn start(once: bool) -> Result<(), String> {
-    let _ = pair::runtime_access()?;
+    // Hold a fixed device identity for the lifetime of this process.
+    let access = pair::runtime_access()?;
     let runtime = Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -171,36 +213,30 @@ pub fn start(once: bool) -> Result<(), String> {
         let stop = tokio::signal::ctrl_c();
         tokio::pin!(stop);
         loop {
-            // Re-establish exact user-granted metadata after every reconnect.
-            // Never advertise workspaces that have not been synced to beta Cloud.
-            tokio::task::spawn_blocking(pair::sync)
-                .await
-                .map_err(|_| "beta workspace sync worker failed")??;
-            let access = pair::runtime_access()?;
-            tokio::select! {
-                result = connect_once(&access, once) => {
-                    if once {
-                        return result;
-                    }
-                    match result {
-                        Ok(()) => eprintln!("beta runtime connection ended"),
-                        Err(message) => {
-                            if message.contains("401")
-                                || message.contains("403")
-                                || message.contains("registration was rejected")
-                            {
-                                return Err(message);
-                            }
-                            eprintln!("beta runtime disconnected: {message}");
-                        }
-                    }
-                }
+            let mut registered_at = None;
+            let result = tokio::select! {
+                result = async {
+                    let ids = sync_for(&access).await?;
+                    connect_once(&access, once, ids, &mut registered_at).await
+                } => result,
                 _ = &mut stop => return Ok(()),
+            };
+            if once {
+                return result.map_err(|err| err.to_string());
             }
-            let backoff = Duration::from_secs(delay);
+            match result {
+                Ok(()) => eprintln!("beta runtime connection ended"),
+                Err(pair::SyncFailure::Permanent(message)) => return Err(message),
+                Err(pair::SyncFailure::Retryable(message)) => {
+                    eprintln!("beta runtime disconnected: {message}");
+                }
+            }
+            if registered_at.is_some_and(|instant| instant.elapsed() >= STABLE_CONNECTION) {
+                delay = 1;
+            }
             eprintln!("reconnecting beta runtime in {} seconds", delay);
             tokio::select! {
-                _ = sleep(backoff) => {},
+                _ = sleep(Duration::from_secs(delay)) => {},
                 _ = &mut stop => return Ok(()),
             }
             delay = (delay * 2).min(30);
