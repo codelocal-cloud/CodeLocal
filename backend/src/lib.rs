@@ -19,6 +19,8 @@ mod password;
 mod password_reset;
 mod public_url;
 mod runtime;
+#[cfg(test)]
+mod runtime_e2e;
 mod runtime_secrets;
 mod runtime_settings;
 mod signup;

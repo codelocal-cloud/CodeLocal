@@ -1439,7 +1439,8 @@ mod tests {
                 .is_some()
         );
         let credential_id = format!("cld_{suffix}");
-        let secret_hash = hex::encode(Sha256::digest(b"beta-integration-credential"));
+        let socket_fixture_secret = "a".repeat(80);
+        let secret_hash = hex::encode(Sha256::digest(socket_fixture_secret.as_bytes()));
         let signing = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
         let public_key = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(signing.verifying_key().as_bytes());
@@ -1810,6 +1811,15 @@ mod tests {
             vec!["my-beta-workspace".to_owned()]
         );
         let visible = vec!["my-beta-workspace".to_owned()];
+        crate::runtime_e2e::verify_socket(
+            app.clone(),
+            &store,
+            &device,
+            &socket_fixture_secret,
+            &signing,
+            &visible,
+        )
+        .await;
         let old_lease = store
             .begin_runtime_presence(&credential_id, &visible)
             .await
